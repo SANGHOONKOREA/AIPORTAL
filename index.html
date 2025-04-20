@@ -9,10 +9,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" />
+    <!-- Highlight.js - 코드 강조 표시용 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <!-- Marked - 마크다운 파싱용 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.0.2/marked.min.js"></script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
     <!-- Excel 관련 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <!-- 분리된 스타일 시트 및 스크립트 파일 -->
@@ -167,6 +173,43 @@
               <i class="fas fa-save"></i>
               <span>모든 변경사항 저장</span>
             </button>
+          </div>
+        </div>
+        <!-- 새로 추가: AI 모델 관리 섹션 -->
+        <div class="admin-panel-section">
+          <h3 class="admin-panel-section-title">
+            <i class="fas fa-microchip"></i> AI 모델 관리
+          </h3>
+          <div class="admin-panel-content-pane">
+            <form id="aiModelForm">
+              <div class="form-group mb-3">
+                <label for="apiKey" class="form-label">API 키</label>
+                <input id="apiKey" type="password" class="form-input" placeholder="OpenAI API 키를 입력하세요">
+                <button type="button" id="toggleApiKey" class="text-blue-500 text-sm mt-1">
+                  <i class="fas fa-eye"></i> 표시
+                </button>
+              </div>
+              <div class="form-group mb-3">
+                <label for="modelSelect" class="form-label">AI 모델 선택</label>
+                <select id="modelSelect" class="form-input">
+                  <option value="gpt-4o-mini">GPT-4o-mini (기본)</option>
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                  <option value="gpt-4">GPT-4</option>
+                </select>
+              </div>
+              <div class="form-group mb-3">
+                <label for="maxTokens" class="form-label">최대 토큰 수</label>
+                <input id="maxTokens" type="number" min="100" max="16000" value="4000" class="form-input">
+              </div>
+              <div class="form-group mb-3">
+                <label for="temperature" class="form-label">Temperature (0.0-1.0)</label>
+                <input id="temperature" type="range" min="0" max="10" value="7" class="w-full" 
+                  oninput="document.getElementById('tempValue').textContent = (this.value/10).toFixed(1)">
+                <span id="tempValue" class="text-sm text-gray-500">0.7</span>
+              </div>
+              <button type="button" id="saveAiModelBtn" class="btn-primary w-full">저장</button>
+            </form>
           </div>
         </div>
       </div>
@@ -331,6 +374,24 @@
           </div>
         </div>
         <div class="sidebar-content">
+          <!-- GPT 채팅 버튼 추가 -->
+<div class="mb-3 mt-2">
+  <button id="new-chat-btn" class="w-full flex items-center p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all">
+    <i class="fas fa-plus-circle mr-2"></i>
+    <span class="sidebar-nav-text">새 채팅</span>
+  </button>
+  <button id="chat-history-btn" class="w-full flex items-center p-2 mt-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg transition-all">
+    <i class="fas fa-history mr-2"></i>
+    <span class="sidebar-nav-text">채팅 히스토리</span>
+  </button>
+</div>
+          
+          <!-- 즐겨찾기 섹션 추가 -->
+          <div class="mb-2 px-3">
+            <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">즐겨찾기</h3>
+          </div>
+          <nav id="favorites-list" class="space-y-1 mb-4"></nav>
+          
           <div class="mb-2 px-3">
             <h3 class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">챗봇 그룹</h3>
           </div>
@@ -401,6 +462,64 @@
       </main>
     </div>
 
+    <!-- GPT 채팅 인터페이스 -->
+    <div id="gpt-chat-container" class="fixed inset-0 z-40 flex flex-col bg-gray-100 dark:bg-gray-900" style="display: none;">
+      <div class="chat-header flex items-center justify-between p-4 bg-white dark:bg-gray-800 shadow-sm">
+        <div class="flex items-center">
+          <button id="back-to-home" class="mr-4 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white" id="chat-title">새 채팅</h2>
+        </div>
+        <div>
+          <button id="chat-settings" class="text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100 p-2">
+            <i class="fas fa-cog"></i>
+          </button>
+        </div>
+      </div>
+
+      <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+
+      <div class="chat-input-container bg-white dark:bg-gray-800 p-4 shadow-lg">
+        <div id="file-preview-area" class="mb-2 flex flex-wrap gap-2" style="display: none;"></div>
+        <div class="relative">
+          <div id="chat-input-box" class="border border-gray-300 dark:border-gray-600 rounded-lg p-3 pr-12 min-h-[80px] max-h-[200px] overflow-y-auto bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200" tabindex="0" contenteditable="true" placeholder="메시지를 입력하세요..."></div>
+          <div class="absolute right-2 bottom-2 flex items-center">
+            <button id="file-upload-btn" class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+              <i class="fas fa-paperclip"></i>
+            </button>
+            <button id="send-message-btn" class="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+<input type="file" id="file-upload-input"
+       style="position:absolute;opacity:0;width:1px;height:1px;left:-9999px;"
+       multiple>
+        </div>
+        <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+          파일을 드래그하거나 스크린샷을 붙여넣을 수 있습니다. (Ctrl+V)
+        </div>
+      </div>
+    </div>
+
+    <!-- 채팅 히스토리 인터페이스 -->
+    <div id="chat-history-container" class="fixed inset-0 z-40 flex flex-col bg-gray-100 dark:bg-gray-900" style="display: none;">
+      <div class="chat-header flex items-center justify-between p-4 bg-white dark:bg-gray-800 shadow-sm">
+        <div class="flex items-center">
+          <button id="back-from-history" class="mr-4 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-100">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white">채팅 히스토리</h2>
+        </div>
+      </div>
+
+      <div id="history-list" class="flex-1 overflow-y-auto p-4">
+        <div class="grid grid-cols-1 gap-4">
+          <!-- 채팅 히스토리 항목들이 여기에 추가됩니다 -->
+        </div>
+      </div>
+    </div>
+
     <!-- 알림 토스트 -->
     <div id="toast" class="toast">
       <div class="toast-icon">
@@ -414,8 +533,28 @@
         <i class="fas fa-times"></i>
       </button>
     </div>
+<!-- 디버깅용 콘솔 버튼 추가 (개발 중에만 사용) -->
+<div id="debug-panel" style="position: fixed; bottom: 20px; left: 20px; z-index: 1000; display: none;">
+  <button onclick="window.debugChat.ensureDOMElements()" class="bg-red-500 text-white p-2 mb-2 rounded">DOM 요소 확인</button>
+  <button onclick="window.debugChat.forceClickNewChat()" class="bg-green-500 text-white p-2 mb-2 rounded">새 채팅 강제 클릭</button>
+  <button onclick="window.debugChat.forceClickChatHistory()" class="bg-blue-500 text-white p-2 rounded">히스토리 강제 클릭</button>
+</div>
 
+<!-- 디버깅 패널 토글 키 핸들러 -->
+<script>
+  // Ctrl+D 키를 누르면 디버깅 패널 토글
+  document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'd') {
+      e.preventDefault();
+      const debugPanel = document.getElementById('debug-panel');
+      if (debugPanel) {
+        debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
+      }
+    }
+  });
+</script>
     <!-- 분리된 스크립트 파일 -->
     <script src="script.js"></script>
+    <script src="chat.js"></script>
   </body>
 </html>
