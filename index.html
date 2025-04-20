@@ -483,7 +483,7 @@
       <div class="chat-input-container bg-white dark:bg-gray-800 p-4 shadow-lg">
         <div id="file-preview-area" class="mb-2 flex flex-wrap gap-2" style="display: none;"></div>
         <div class="relative">
-          <div id="chat-input-box" class="border border-gray-300 dark:border-gray-600 rounded-lg p-3 pr-12 min-h-[80px] max-h-[200px] overflow-y-auto bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200" tabindex="0" contenteditable="true" placeholder="메시지를 입력하세요..."></div>
+          <div id="chat-input-box" class="border border-gray-300 dark:border-gray-600 rounded-lg p-3 pr-12 min-h-[80px] max-h-[200px] overflow-y-auto bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200" contenteditable="true" placeholder="메시지를 입력하세요..."></div>
           <div class="absolute right-2 bottom-2 flex items-center">
             <button id="file-upload-btn" class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
               <i class="fas fa-paperclip"></i>
@@ -492,9 +492,7 @@
               <i class="fas fa-paper-plane"></i>
             </button>
           </div>
-<input type="file" id="file-upload-input"
-       style="position:absolute;opacity:0;width:1px;height:1px;left:-9999px;"
-       multiple>
+          <input type="file" id="file-upload-input" class="hidden" multiple>
         </div>
         <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
           파일을 드래그하거나 스크린샷을 붙여넣을 수 있습니다. (Ctrl+V)
