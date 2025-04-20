@@ -305,41 +305,19 @@ async function fetchAIResponse(messages) {
     console.log("API에 전송할 메시지:", messages);
     
     // OpenAI API 호출
-async function fetchAIResponse(messages) {
-  // FormData 준비
-  const form = new FormData();
-  // messages는 JSON 배열이므로 Blob으로 감싸서 전송
-  form.append('messages', new Blob([JSON.stringify(messages)], { type: 'application/json' }));
-  // 모델 파라미터
-  form.append('model', aiConfig.model);
-  form.append('max_tokens', aiConfig.maxTokens);
-  form.append('temperature', aiConfig.temperature);
-
-  // 파일 첨부 (이미지든 PDF든, rawFile 프로퍼티에 원본 File 객체를 담아 두세요)
-  activeFiles.forEach(file => {
-    if (file.rawFile) {
-      form.append('files', file.rawFile, file.name);
-    }
-  });
-
-  // Assistants API 호출 (chat completions 대신)
-  const assistantId = 'YOUR_ASSISTANT_ID'; // 미리 생성한 assistant id
-  const response = await fetch(`https://api.openai.com/v1/assistants/${assistantId}/messages`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${aiConfig.apiKey}`,
-      // 'Content-Type' 제거: 브라우저가 multipart boundary를 자동 설정
-    },
-    body: form
-  });
-
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(`API 오류: ${err.error?.message || response.statusText}`);
-  }
-  return await response.json();
-}
-
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${aiConfig.apiKey}`
+      },
+      body: JSON.stringify({
+        model: aiConfig.model,
+        messages: messages,
+        max_tokens: aiConfig.maxTokens,
+        temperature: aiConfig.temperature
+      })
+    });
     
     if (!response.ok) {
       const errorData = await response.json();
