@@ -31,8 +31,8 @@ let favorites = []; // 즐겨찾기 목록을 저장할 배열
 // AI 모델 설정 (기본값)
 // ──────── 수정 후 ────────
 const DEFAULT_AI_CONFIG = {
-  apiKey: "",                                // 빈 문자열(관리자 패널에서 입력)
-  model:  "gpt-4o-mini",                   // 일반 계정 기본값
+  apiKey: "",                                // 빈 문자열(관리자 패널에서 입력)
+  model:  "gpt-4o-mini",                   // 일반 계정 기본값
   maxTokens: 4000,
   temperature: 0.7
 };
@@ -301,6 +301,12 @@ window.startNewChat = startNewChat;
     DOM.initialLoader.style.display = "none";
     DOM.loginContainer.style.display = "flex";
   }, 1000);
+  
+  // 유저 관리 기능 초기화 추가
+  initUserManagement();
+  
+  // 즐겨찾기 스타일 추가
+  addGlobalFavoriteStyles();
 });
 
 /****************************************
@@ -605,8 +611,42 @@ function getBrowserInfo() {
   };
 }
 
-// 사용자 관리 초기화 함수를 전역 영역에 정의
+// 사용자 관리 초기화 함수
 function initUserManagement() {
+  console.log("유저 관리 초기화 중...");
+  
+  // 유저 목록 보기 버튼
+  const userListBtn = document.getElementById("userListBtn");
+  if (userListBtn) {
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    const newUserListBtn = userListBtn.cloneNode(true);
+    userListBtn.parentNode.replaceChild(newUserListBtn, userListBtn);
+    
+    newUserListBtn.addEventListener("click", function() {
+      console.log("유저 목록 버튼 클릭됨");
+      showUserList();
+    });
+    console.log("유저 목록 버튼 이벤트 리스너 등록 완료");
+  } else {
+    console.error("userListBtn 요소를 찾을 수 없습니다");
+  }
+  
+  // 유저 등록 버튼
+  const userRegisterBtn = document.getElementById("userRegisterBtn");
+  if (userRegisterBtn) {
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    const newUserRegisterBtn = userRegisterBtn.cloneNode(true);
+    userRegisterBtn.parentNode.replaceChild(newUserRegisterBtn, userRegisterBtn);
+    
+    newUserRegisterBtn.addEventListener("click", function() {
+      console.log("유저 등록 버튼 클릭됨");
+      showUserRegistration();
+    });
+    console.log("유저 등록 버튼 이벤트 리스너 등록 완료");
+  } else {
+    console.error("userRegisterBtn 요소를 찾을 수 없습니다");
+  }
+  
   // 팝업창 관련 함수들 정의
   window.showPopup = function(title, content) {
     // 기존 팝업이 있으면 제거
@@ -661,10 +701,11 @@ function initUserManagement() {
               <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이메일</th>
               <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">권한</th>
               <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">그룹</th>
+              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">관리</th>
             </tr>
           </thead>
           <tbody id="popup-userListTableBody">
-            <!-- drawUserList() 함수에서 동적으로 채워집니다. -->
+            <!-- drawUserListForPopup() 함수에서 동적으로 채워집니다. -->
           </tbody>
         </table>
       </div>
@@ -766,153 +807,198 @@ function initUserManagement() {
         });
     });
   };
-
-  window.drawUserListForPopup = function() {
-    const tbody = document.getElementById("popup-userListTableBody");
-    if (!tbody) {
-      console.error("popup-userListTableBody 요소를 찾을 수 없습니다.");
-      return;
-    }
+  
+  // 유저 수정 함수
+  window.showUserEdit = function(userId, userData) {
+    // 유저 등록 폼과 동일한 구성으로 수정 폼을 생성(이메일은 수정하지 않도록 readonly 처리)
+    const content = `
+      <form id="popup-userEditForm">
+        <div class="form-group mb-4">
+          <label for="popup-editName" class="form-label">이름</label>
+          <input id="popup-editName" type="text" class="form-input" placeholder="이름 입력" required value="${userData.displayName || ''}">
+        </div>
+        <div class="form-group mb-4">
+          <label for="popup-editEmail" class="form-label">이메일</label>
+          <input id="popup-editEmail" type="email" class="form-input" placeholder="이메일 입력" required value="${userData.email || ''}" readonly>
+        </div>
+        <div class="form-group mb-4">
+          <label for="popup-editRole" class="form-label">권한</label>
+          <select id="popup-editRole" class="form-input" required>
+            <option value="">선택하세요</option>
+            <option value="사용자" ${userData.role === "사용자" ? "selected" : ""}>사용자</option>
+            <option value="관리자" ${userData.role === "관리자" ? "selected" : ""}>관리자</option>
+            <option value="슈퍼관리자" ${userData.role === "슈퍼관리자" ? "selected" : ""}>슈퍼관리자</option>
+          </select>
+        </div>
+        <div class="form-group mb-4">
+          <label for="popup-editGroup" class="form-label">그룹</label>
+          <input id="popup-editGroup" type="text" class="form-input" placeholder="그룹 입력" required value="${userData.group || ''}">
+        </div>
+        <div class="form-group mb-4">
+          <label for="popup-editPassword" class="form-label">새 비밀번호 (변경 시에만 입력)</label>
+          <input id="popup-editPassword" type="password" class="form-input" placeholder="새 비밀번호">
+        </div>
+        <button type="submit" class="btn-primary w-full">유저 정보 수정</button>
+      </form>
+    `;
     
-    // 테이블 내용 비우기
-    tbody.innerHTML = "";
+    showPopup("유저 수정", content);
     
-    // Firebase에서 유저 데이터 가져오기
-    firebase.database().ref("users").once("value")
-      .then(function(snapshot) {
-        snapshot.forEach(function(childSnapshot) {
-          const user = childSnapshot.val();
-          const userId = childSnapshot.key; // Firebase에서 유저의 key를 id로 사용
-          const tr = document.createElement("tr");
-          
-          // 각 컬럼 생성
-          const tdName = document.createElement("td");
-          tdName.className = "px-4 py-2 border";
-          tdName.textContent = user.displayName || "";
-          
-          const tdEmail = document.createElement("td");
-          tdEmail.className = "px-4 py-2 border";
-          tdEmail.textContent = user.email || "";
-          
-          const tdRole = document.createElement("td");
-          tdRole.className = "px-4 py-2 border";
-          tdRole.textContent = user.role || "";
-          
-          const tdGroup = document.createElement("td");
-          tdGroup.className = "px-4 py-2 border";
-          tdGroup.textContent = user.group || "";
-          
-          const tdEdit = document.createElement("td");
-          tdEdit.className = "px-4 py-2 border text-center";
-          // 수정 버튼 생성
-          const editBtn = document.createElement("button");
-          editBtn.className = "btn-primary px-3 py-1 text-sm";
-          editBtn.textContent = "수정";
-          editBtn.addEventListener("click", function() {
-            showUserEdit(userId, user);
-          });
-          tdEdit.appendChild(editBtn);
-          
-          // 행에 컬럼 추가
-          tr.appendChild(tdName);
-          tr.appendChild(tdEmail);
-          tr.appendChild(tdRole);
-          tr.appendChild(tdGroup);
-          tr.appendChild(tdEdit);
-          
-          // 테이블에 행 추가
-          tbody.appendChild(tr);
+    document.getElementById("popup-userEditForm").addEventListener("submit", function(e) {
+      e.preventDefault();
+      
+      // 수정된 값 가져오기
+      const updatedUser = {
+        displayName: document.getElementById("popup-editName").value.trim(),
+        // 이메일은 readonly로 수정 불가
+        role: document.getElementById("popup-editRole").value,
+        group: document.getElementById("popup-editGroup").value.trim(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      const newPassword = document.getElementById("popup-editPassword").value;
+      
+      // 비밀번호 변경이 포함된 경우
+      let passwordUpdatePromise = Promise.resolve();
+      if (newPassword) {
+        // Firebase Auth에 이메일 조회 후 비밀번호 업데이트
+        const email = userData.email;
+        if (email) {
+          passwordUpdatePromise = firebase.auth().signInWithEmailAndPassword(email, newPassword)
+            .then(userCredential => {
+              return userCredential.user.updatePassword(newPassword);
+            })
+            .catch(error => {
+              console.error("비밀번호 업데이트 실패:", error);
+              // 비밀번호 업데이트 실패해도 계속 진행
+              return Promise.resolve();
+            });
+        }
+      }
+      
+      // Firebase DB 업데이트
+      passwordUpdatePromise
+        .then(() => {
+          return firebase.database().ref("users/" + userId).update(updatedUser);
+        })
+        .then(function() {
+          showToast("유저 수정이 완료되었습니다.");
+          // 팝업 닫기
+          const popup = document.getElementById("user-management-popup");
+          if (popup) {
+            document.body.removeChild(popup);
+          }
+          // 수정된 내용이 반영되도록 유저 목록 다시 그리기
+          setTimeout(() => {
+            showUserList();
+          }, 300);
+        })
+        .catch(function(error) {
+          console.error("유저 수정 실패:", error);
+          showToast("유저 수정 실패: " + error.message, true);
         });
-      })
-      .catch(function(error) {
-        console.error("유저 목록 로딩 실패:", error);
-        showToast("유저 목록 로딩 실패: " + error.message, true);
-      });
+    });
   };
-
-  // 사용자 관리 버튼 이벤트 연결
-  const userListBtn = document.getElementById("userListBtn");
-  const userRegisterBtn = document.getElementById("userRegisterBtn");
   
-  if (userListBtn) {
-    userListBtn.addEventListener("click", function() {
-      showUserList();
-    });
-  } else {
-    console.error("userListBtn 요소를 찾을 수 없습니다.");
-  }
-  
-  if (userRegisterBtn) {
-    userRegisterBtn.addEventListener("click", function() {
-      showUserRegistration();
-    });
-  } else {
-    console.error("userRegisterBtn 요소를 찾을 수 없습니다.");
-  }
+  console.log("유저 관리 초기화 완료");
 }
 
-function showUserEdit(userId, userData) {
-  // 유저 등록 폼과 동일한 구성으로 수정 폼을 생성(이메일은 수정하지 않도록 readonly 처리)
-  const content = `
-    <form id="popup-userEditForm">
-      <div class="form-group mb-4">
-        <label for="popup-editName" class="form-label">이름</label>
-        <input id="popup-editName" type="text" class="form-input" placeholder="이름 입력" required value="${userData.displayName || ''}">
-      </div>
-      <div class="form-group mb-4">
-        <label for="popup-editEmail" class="form-label">이메일</label>
-        <input id="popup-editEmail" type="email" class="form-input" placeholder="이메일 입력" required value="${userData.email || ''}" readonly>
-      </div>
-      <div class="form-group mb-4">
-        <label for="popup-editRole" class="form-label">권한</label>
-        <select id="popup-editRole" class="form-input" required>
-          <option value="">선택하세요</option>
-          <option value="사용자" ${userData.role === "사용자" ? "selected" : ""}>사용자</option>
-          <option value="관리자" ${userData.role === "관리자" ? "selected" : ""}>관리자</option>
-          <option value="슈퍼관리자" ${userData.role === "슈퍼관리자" ? "selected" : ""}>슈퍼관리자</option>
-        </select>
-      </div>
-      <div class="form-group mb-4">
-        <label for="popup-editGroup" class="form-label">그룹</label>
-        <input id="popup-editGroup" type="text" class="form-input" placeholder="그룹 입력" required value="${userData.group || ''}">
-      </div>
-      <!-- 비밀번호 수정 항목은 필요 시 추가 -->
-      <button type="submit" class="btn-primary w-full">유저 수정</button>
-    </form>
+// 유저 목록 그리기 함수
+function drawUserListForPopup() {
+  const tbody = document.getElementById("popup-userListTableBody");
+  if (!tbody) {
+    console.error("popup-userListTableBody 요소를 찾을 수 없습니다.");
+    return;
+  }
+  
+  // 테이블 내용 비우기
+  tbody.innerHTML = "";
+  
+  // 로딩 상태 표시
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="5" class="px-4 py-4 border text-center">
+        <div class="flex items-center justify-center">
+          <div class="w-6 h-6 border-2 border-gray-200 dark:border-gray-700 border-t-blue-500 rounded-full inline-block animate-spin mr-2"></div>
+          <span>사용자 목록을 불러오는 중...</span>
+        </div>
+      </td>
+    </tr>
   `;
   
-  showPopup("유저 수정", content);
-  
-  document.getElementById("popup-userEditForm").addEventListener("submit", function(e) {
-    e.preventDefault();
-    
-    // 수정된 값 가져오기
-    const updatedUser = {
-      displayName: document.getElementById("popup-editName").value.trim(),
-      // 이메일은 readonly로 수정 불가
-      role: document.getElementById("popup-editRole").value,
-      group: document.getElementById("popup-editGroup").value.trim()
-      // 필요하다면 비밀번호 변경 로직을 추가할 수 있음
-    };
-    
-    // Firebase DB 업데이트
-    firebase.database().ref("users/" + userId)
-      .update(updatedUser)
-      .then(function() {
-        showToast("유저 수정이 완료되었습니다.");
-        // 팝업 닫기
-        const popup = document.getElementById("user-management-popup");
-        if (popup) {
-          document.body.removeChild(popup);
-        }
-        // 수정된 내용이 반영되도록 유저 목록 다시 그리기
-        drawUserListForPopup();
-      })
-      .catch(function(error) {
-        console.error("유저 수정 실패:", error);
-        showToast("유저 수정 실패: " + error.message, true);
+  // Firebase에서 유저 데이터 가져오기
+  firebase.database().ref("users").once("value")
+    .then(function(snapshot) {
+      // 로딩 메시지 제거
+      tbody.innerHTML = "";
+      
+      if (!snapshot.exists() || snapshot.numChildren() === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="px-4 py-4 border text-center">
+              등록된 사용자가 없습니다.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+      
+      snapshot.forEach(function(childSnapshot) {
+        const user = childSnapshot.val();
+        const userId = childSnapshot.key; // Firebase에서 유저의 key를 id로 사용
+        const tr = document.createElement("tr");
+        
+        // 각 컬럼 생성
+        const tdName = document.createElement("td");
+        tdName.className = "px-4 py-2 border";
+        tdName.textContent = user.displayName || "";
+        
+        const tdEmail = document.createElement("td");
+        tdEmail.className = "px-4 py-2 border";
+        tdEmail.textContent = user.email || "";
+        
+        const tdRole = document.createElement("td");
+        tdRole.className = "px-4 py-2 border";
+        tdRole.textContent = user.role || "";
+        
+        const tdGroup = document.createElement("td");
+        tdGroup.className = "px-4 py-2 border";
+        tdGroup.textContent = user.group || "";
+        
+        const tdEdit = document.createElement("td");
+        tdEdit.className = "px-4 py-2 border text-center";
+        // 수정 버튼 생성
+        const editBtn = document.createElement("button");
+        editBtn.className = "btn-primary px-3 py-1 text-sm";
+        editBtn.textContent = "수정";
+        editBtn.addEventListener("click", function() {
+          showUserEdit(userId, user);
+        });
+        tdEdit.appendChild(editBtn);
+        
+        // 행에 컬럼 추가
+        tr.appendChild(tdName);
+        tr.appendChild(tdEmail);
+        tr.appendChild(tdRole);
+        tr.appendChild(tdGroup);
+        tr.appendChild(tdEdit);
+        
+        // 테이블에 행 추가
+        tbody.appendChild(tr);
       });
-  });
+    })
+    .catch(function(error) {
+      console.error("유저 목록 로딩 실패:", error);
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="5" class="px-4 py-2 border text-center text-red-500">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            유저 목록을 불러오는 데 실패했습니다.
+          </td>
+        </tr>
+      `;
+      showToast("유저 목록 로딩 실패: " + error.message, true);
+    });
 }
 
 /****************************************
@@ -979,21 +1065,20 @@ auth.onAuthStateChanged(user => {
           return userData;
         } else {
           // 기존 사용자 마지막 로그인 시간 업데이트
-// 기존 사용자 마지막 로그인 시간 업데이트
-db.ref("users/" + user.uid + "/lastLogin").set(new Date().toISOString());
-return snap.val();
+          db.ref("users/" + user.uid + "/lastLogin").set(new Date().toISOString());
+          return snap.val();
         }
       })
       .then(userData => {
         // 사용자 권한 저장 및 UI 업데이트
         userRole = userData.role;
         
-// UI 업데이트: 로그인 화면 숨기고 앱 컨테이너 표시
-DOM.loginContainer.style.display = "none";
-DOM.appContainer.style.display = "flex";
-
-// 여기에 DOM 요소 참조 확인 및 이벤트 리스너 재설정 추가
-setTimeout(ensureDOMElements, 500);
+        // UI 업데이트: 로그인 화면 숨기고 앱 컨테이너 표시
+        DOM.loginContainer.style.display = "none";
+        DOM.appContainer.style.display = "flex";
+        
+        // 여기에 DOM 요소 참조 확인 및 이벤트 리스너 재설정 추가
+        setTimeout(ensureDOMElements, 500);
         
         // 사용자 정보 표시
         DOM.userNameEl.textContent = userData.displayName || userData.email;
@@ -1038,6 +1123,11 @@ setTimeout(ensureDOMElements, 500);
           
           // 로그인 활동 로깅
           logUserActivity("login");
+          
+          // 유저 관리 초기화 추가 (권한에 따라)
+          if (userData.role === "관리자" || userData.role === "슈퍼관리자") {
+            initUserManagement();
+          }
         }).catch(err => {
           console.error("데이터 로드 오류:", err);
           showToast("데이터 로드에 문제가 발생했습니다.", true);
@@ -1489,6 +1579,9 @@ function renderSessionDropdown(groupId) {
   const sessionDropdownMenu = DOM.sessionDropdownMenu;
   sessionDropdownMenu.innerHTML = "";
   
+  // 드롭다운 메뉴의 z-index 값을 증가시켜 즐겨찾기 별 위에 표시되도록 함
+  sessionDropdownMenu.style.zIndex = "50";
+
   // 그룹이 "전체"로 선택된 경우: 모든 그룹의 세션을 가져와 "그룹명 + 세션명" 형태로 표시
   if (groupId === "all") {
     // 전체 항목 먼저 추가
@@ -1941,6 +2034,9 @@ function renderAllGroupsContent() {
   setTimeout(() => {
     contentArea.innerHTML = "";
     
+    // 콘텐츠 렌더링 완료 후 즐겨찾기 상태 업데이트
+    setTimeout(updateFavoriteStarsVisually, 100);
+
     // 챗봇이 없는 경우
     if (!chatbotGroups.length) {
       contentArea.innerHTML = `
@@ -2135,7 +2231,7 @@ function renderChatbotSection(container, chatbots, group) {
 
 // 챗봇 카드 렌더링
 function renderChatbotCards(bots, showGroup = false) {
-  return bots
+  const cardsHtml = bots
     .map(bot => {
       // 챗봇 아이콘 설정
       const icon = getIconForBot(bot.name);
@@ -2152,14 +2248,14 @@ function renderChatbotCards(bots, showGroup = false) {
         sessionName = session ? session.title : sessionName;
       }
       
-      // 즐겨찾기 상태 확인
-      const isFavorite = favorites.some(fav => fav.botId === bot.id);
+      // 즐겨찾기 상태 확인 - 문자열로 변환하여 비교
+      const isFavorite = favorites.some(fav => fav.botId === bot.id.toString());
       
-      // 카드 생성
+      // 카드 생성 - data-id 속성 추가
       return `
-        <div class="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 ease-in-out ${deleteMode ? 'ring-2 ring-red-200 dark:ring-red-900' : ''}" data-name="${bot.name.toLowerCase()}">
+        <div class="relative bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200 ease-in-out ${deleteMode ? 'ring-2 ring-red-200 dark:ring-red-900' : ''}" data-name="${bot.name.toLowerCase()}" data-id="${bot.id}">
           <button class="favorite-toggle ${isFavorite ? 'active' : ''}" onclick="toggleFavorite('${bot.id}', '${bot.groupId || selectedGroupId}')">
-            <i class="fas ${isFavorite ? 'fa-star' : 'fa-star text-gray-400'}"></i>
+            <i class="fas fa-star" style="color: ${isFavorite ? '#f59e0b' : '#94a3b8'};"></i>
           </button>
           <div class="p-5">
             <div class="flex items-center justify-center w-12 h-12 mx-auto mb-4 rounded-full bg-blue-50 dark:bg-blue-900">
@@ -2187,6 +2283,40 @@ function renderChatbotCards(bots, showGroup = false) {
       `;
     })
     .join("");
+    
+  // 렌더링 후 즐겨찾기 상태 업데이트를 위한 setTimeout 추가
+  setTimeout(updateFavoriteStarsVisually, 100);
+  
+  return cardsHtml;
+}
+
+// 즐겨찾기 시각적 상태 업데이트 함수
+function updateFavoriteStarsVisually() {
+  const favoriteButtons = document.querySelectorAll('.favorite-toggle');
+  
+  favoriteButtons.forEach(button => {
+    const cardElement = button.closest('[data-name]');
+    if (!cardElement) return;
+    
+    // data-id 속성에서 챗봇 ID 추출 시도
+    const botId = cardElement.getAttribute('data-id');
+    if (!botId) return;
+    
+    const isFavorite = favorites.some(fav => fav.botId === botId);
+    const starIcon = button.querySelector('.fa-star');
+    
+    if (isFavorite) {
+      button.classList.add('active');
+      if (starIcon) {
+        starIcon.style.color = '#f59e0b'; // 인라인 스타일로 강제 적용
+      }
+    } else {
+      button.classList.remove('active');
+      if (starIcon) {
+        starIcon.style.color = '#94a3b8'; // 인라인 스타일로 강제 적용
+      }
+    }
+  });
 }
 
 // 즐겨찾기 토글 함수
@@ -2208,19 +2338,14 @@ function toggleFavorite(botId, groupId) {
     });
   }
   
-  // Firebase에 즐겨찾기 저장
-  saveFavorites();
-  
   // UI 업데이트
   renderSidebar();
   
-  // 현재 콘텐츠 업데이트
-  if (selectedGroupId === "all") {
-    renderAllGroupsContent();
-  } else {
-    const group = chatbotGroups.find(g => g.id == selectedGroupId);
-    if (group) renderContentForGroup(group);
-  }
+  // 즐겨찾기 상태 즉시 업데이트
+  updateFavoriteStarsVisually();
+  
+  // Firebase에 즐겨찾기 저장
+  saveFavorites();
 }
 
 // 즐겨찾기 목록 로드
@@ -2235,12 +2360,21 @@ function loadFavorites() {
         if (!Array.isArray(favorites)) {
           favorites = Object.values(favorites);
         }
+        
+        // ID를 문자열로 변환 (일관성 유지)
+        favorites = favorites.map(fav => ({
+          ...fav,
+          botId: fav.botId.toString()
+        }));
       } else {
         favorites = [];
       }
       
       // 사이드바 업데이트
       renderSidebar();
+      
+      // 즐겨찾기 별 아이콘 상태 업데이트
+      setTimeout(updateFavoriteStarsVisually, 200);
     })
     .catch(err => {
       console.error("즐겨찾기 로드 실패:", err);
@@ -2579,7 +2713,7 @@ function addChatbot() {
   // "전체" 제외한 세션만 표시
   const selectableSessions = availableSessions.filter(s => s.id !== "all");
   
-  // 세션 목록 문자열 생성
+// 세션 목록 문자열 생성
   let sessionListStr = "아래 번호 중 하나를 선택하세요:\n";
   selectableSessions.forEach((s, index) => {
     sessionListStr += `${index + 1}. ${s.title}\n`;
@@ -3589,7 +3723,28 @@ document.addEventListener("DOMContentLoaded", function() {
   
   // 브라우저 지원 확인
   checkBrowserSupport();
+
+  // 즐겨찾기 스타일 추가
+  addGlobalFavoriteStyles();
+  
+  // 유저 관리 초기화
+  initUserManagement();
 });
+
+function addGlobalFavoriteStyles() {
+  const styleElement = document.createElement('style');
+  styleElement.textContent = `
+    .favorite-toggle.active .fa-star {
+      color: #f59e0b !important;
+    }
+    
+    .favorite-toggle:not(.active) .fa-star {
+      color: #94a3b8 !important;
+    }
+  `;
+  document.head.appendChild(styleElement);
+}
+
 // DOM 요소 참조 확인 및 재시도 함수
 function ensureDOMElements() {
   // 핵심 채팅 관련 DOM 요소 참조 갱신
@@ -3618,11 +3773,12 @@ function ensureDOMElements() {
   
   // 새 채팅 버튼과 채팅 히스토리 버튼에 이벤트 리스너 다시 등록
   if (DOM.newChatBtn) {
-    // 기존 이벤트 리스너 제거 (중복 방지) - 직접 함수 대신 null 전달
-    DOM.newChatBtn.removeEventListener("click", null);
-    // 또는 이벤트 리스너 제거 부분 생략
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    const newChatBtnClone = DOM.newChatBtn.cloneNode(true);
+    DOM.newChatBtn.parentNode.replaceChild(newChatBtnClone, DOM.newChatBtn);
+    DOM.newChatBtn = newChatBtnClone;
     
-    // 새 이벤트 리스너 등록 - window 객체를 통해 접근
+    // 새 이벤트 리스너 등록
     DOM.newChatBtn.addEventListener("click", function(e) {
       e.preventDefault();
       console.log("새 채팅 버튼 클릭됨 (재등록)");
@@ -3632,17 +3788,16 @@ function ensureDOMElements() {
   
   if (DOM.chatHistoryBtn) {
     // 기존 이벤트 리스너 제거 (중복 방지)
-    DOM.chatHistoryBtn.removeEventListener("click", showChatHistory);
+    const chatHistoryBtnClone = DOM.chatHistoryBtn.cloneNode(true);
+    DOM.chatHistoryBtn.parentNode.replaceChild(chatHistoryBtnClone, DOM.chatHistoryBtn);
+    DOM.chatHistoryBtn = chatHistoryBtnClone;
+    
     // 새 이벤트 리스너 등록
-// script.js 3579번째 줄 근처 (ensureDOMElements 함수 내부)
-DOM.chatHistoryBtn.addEventListener("click", function(e) {
-  e.preventDefault();
-  window.showChatHistory(); // 전역 객체를 통해 접근
-});
-
-// chat.js에 함수를 전역으로 노출
-// chat.js 파일 맨 아래에 추가
-window.showChatHistory = showChatHistory;
+    DOM.chatHistoryBtn.addEventListener("click", function(e) {
+      e.preventDefault();
+      console.log("채팅 히스토리 버튼 클릭됨 (재등록)");
+      window.showChatHistory(); // 전역 객체를 통해 접근
+    });
   }
 }
 
