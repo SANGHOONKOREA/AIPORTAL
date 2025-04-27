@@ -312,6 +312,29 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 console.log("Firebase 초기화 완료");
 auth.onAuthStateChanged(user => {
   console.log("인증 상태 변경:", user ? user.email : "로그아웃됨");
+  
+  // 로딩 스피너 숨기기
+  DOM.initialLoader.style.display = "none";
+  
+  if (user) {
+    currentUser = user;
+    currentUid = user.uid;
+    
+    // UI 업데이트 및 localStorage 상태 저장
+    localStorage.setItem('isLoggedIn', 'true');
+    updateLoginState(true);
+    
+    // 나머지 사용자 데이터 로드 코드...
+  } else {
+    // 로그아웃 상태 처리
+    currentUser = null;
+    currentUid = null;
+    userRole = "사용자";
+    
+    // UI 업데이트 및 localStorage 상태 저장
+    localStorage.setItem('isLoggedIn', 'false');
+    updateLoginState(false);
+  }
 });
   // 유저 관리 기능 초기화 추가
   initUserManagement();
@@ -1258,6 +1281,47 @@ function handleLogin() {
       DOM.loginBtn.innerHTML = "로그인";
     });
 }
+
+// 로그인 상태에 따라 body 클래스 업데이트
+function updateLoginState(isLoggedIn) {
+  if (isLoggedIn) {
+    document.body.classList.add('logged-in');
+    document.body.classList.remove('logged-out');
+    DOM.loginContainer.style.display = "none";
+    DOM.appContainer.style.display = "flex";
+    console.log("로그인 상태로 UI 업데이트");
+  } else {
+    document.body.classList.add('logged-out');
+    document.body.classList.remove('logged-in');
+    DOM.appContainer.style.display = "none";
+    DOM.loginContainer.style.display = "flex";
+    console.log("로그아웃 상태로 UI 업데이트");
+  }
+}
+
+// 페이지 시작 시 로그인 상태 즉시 확인
+function checkInitialLoginState() {
+  console.log("초기 로그인 상태 확인");
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  
+  // 초기 화면 상태 설정
+  DOM.initialLoader.style.display = "none";
+  updateLoginState(isLoggedIn);
+  
+  // 1초 후 Firebase 인증 상태를 기준으로 다시 확인
+  setTimeout(() => {
+    const currentlyLoggedIn = auth.currentUser !== null;
+    console.log("Firebase 인증 상태 확인:", currentlyLoggedIn);
+    
+    // Firebase 인증 상태와 localStorage 상태가 다르면 업데이트
+    if (currentlyLoggedIn !== isLoggedIn) {
+      console.log("인증 상태 불일치, UI 업데이트");
+      localStorage.setItem('isLoggedIn', currentlyLoggedIn ? 'true' : 'false');
+      updateLoginState(currentlyLoggedIn);
+    }
+  }, 1000);
+}
+
 
 // 로그인 오류 표시
 function showLoginError(message) {
@@ -3751,6 +3815,9 @@ document.addEventListener("DOMContentLoaded", function() {
   // 유저 관리 초기화
   initUserManagement();
 
+    // 초기 로그인 상태 확인
+  checkInitialLoginState();
+  
   // localStorage에서 로그인 상태 확인
   const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
   
