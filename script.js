@@ -1224,7 +1224,11 @@ function handleLogin() {
   // 영구 로그인 설정 후 로그인 시도
   auth.setPersistence(persistence)
     .then(() => {
-      return auth.signInWithEmailAndPassword(emailVal, pwVal);
+      return auth.signInWithEmailAndPassword(emailVal, pwVal)
+        .then(() => {
+          // 로그인 성공 시 localStorage에 상태 저장
+          localStorage.setItem('isLoggedIn', 'true');
+        });
     })
     .catch(err => {
       console.error("로그인 실패:", err);
