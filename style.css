@@ -1362,3 +1362,18 @@ body {
 .dark .file-drop-icon {
   color: #64748b;
 }
+
+  /* 로그인 컨테이너와 앱 컨테이너가 겹치지 않도록 z-index 조정 */
+  #login-container {
+    z-index: 999 !important; /* 로그인이 항상 최상위에 */
+  }
+  
+  /* 로그인 상태일 때 로그인 화면 강제로 숨김 */
+  .logged-in #login-container {
+    display: none !important;
+  }
+  
+  /* 로그인 상태가 아닐 때 앱 강제로 숨김 */
+  .logged-out #app-container {
+    display: none !important;
+  }
