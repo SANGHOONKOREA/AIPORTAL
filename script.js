@@ -301,7 +301,18 @@ window.startNewChat = startNewChat;
     DOM.initialLoader.style.display = "none";
     DOM.loginContainer.style.display = "flex";
   }, 1000);
-  
+    // Firebase 초기화 후 추가
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const auth = firebase.auth();
+const storage = firebase.storage();
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);  
+
+// 추가: Firebase 인증 상태 로그 출력
+console.log("Firebase 초기화 완료");
+auth.onAuthStateChanged(user => {
+  console.log("인증 상태 변경:", user ? user.email : "로그아웃됨");
+});
   // 유저 관리 기능 초기화 추가
   initUserManagement();
   
