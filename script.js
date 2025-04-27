@@ -1200,7 +1200,6 @@ aiConfig = { ...aiConfig, ...snapshot.val() };
     });
 }
 
-// 로그인 처리 함수
 function handleLogin() {
   const emailVal = DOM.loginEmail.value.trim();
   const pwVal = DOM.loginPw.value.trim();
@@ -1228,6 +1227,10 @@ function handleLogin() {
         .then(() => {
           // 로그인 성공 시 localStorage에 상태 저장
           localStorage.setItem('isLoggedIn', 'true');
+          
+          // 페이지 새로고침 대신 UI 직접 전환 (옵션)
+          DOM.loginContainer.style.display = "none";
+          DOM.appContainer.style.display = "flex";
         });
     })
     .catch(err => {
@@ -1248,6 +1251,7 @@ function handleLogin() {
         errorMessage = "네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요.";
       
       showLoginError(errorMessage);
+      localStorage.removeItem('isLoggedIn'); // 로그인 실패 시 상태 제거
       
       // 버튼 상태 복원
       DOM.loginBtn.disabled = false;
@@ -1267,10 +1271,12 @@ function showLoginError(message) {
   }, 5000);
 }
 
-// 로그아웃 함수
 function logout() {
   // 로그아웃 확인
   if (!confirm("로그아웃 하시겠습니까?")) return;
+  
+  // localStorage에서 로그인 상태 제거
+  localStorage.removeItem('isLoggedIn');
   
   // 로그아웃 활동 로깅
   if (currentUid) logUserActivity("logout");
@@ -3744,6 +3750,24 @@ document.addEventListener("DOMContentLoaded", function() {
   
   // 유저 관리 초기화
   initUserManagement();
+
+  // localStorage에서 로그인 상태 확인
+  const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+  
+  if (isLoggedIn) {
+    // 이미 로그인된 상태로 판단하면 로딩 화면 계속 표시
+    // Firebase auth 상태가 확인될 때까지 기다림
+    console.log("localStorage에서 로그인 상태 감지됨");
+    DOM.initialLoader.style.display = "flex";
+    DOM.loginContainer.style.display = "none";
+  } else {
+    // 로그인되지 않은 상태로 판단하면 곧바로 로그인 화면으로 전환
+    setTimeout(() => {
+      DOM.initialLoader.style.display = "none";
+      DOM.loginContainer.style.display = "flex";
+    }, 1000);
+  }
+  
 });
 
 function addGlobalFavoriteStyles() {
