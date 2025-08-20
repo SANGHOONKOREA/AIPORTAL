@@ -236,54 +236,6 @@ document.addEventListener("DOMContentLoaded", function() {
 
   document.getElementById("userExcelDownloadBtn").addEventListener("click", downloadUserExcel);
 
-  // 새 채팅 버튼 이벤트 리스너
-// script.js 242번째 줄 근처
-DOM.newChatBtn.addEventListener("click", function(e) {
-  e.preventDefault();
-  window.startNewChat(); // 전역 객체를 통해 접근
-});
-
-// chat.js에 함수를 전역으로 노출
-// chat.js 파일 맨 아래에 추가
-window.startNewChat = startNewChat;
-  
-  // 채팅 히스토리 버튼 이벤트 리스너
-  DOM.chatHistoryBtn.addEventListener("click", showChatHistory);
-  
-  // 채팅 인터페이스 뒤로 가기 버튼 이벤트 리스너
-  DOM.backToHomeBtn.addEventListener("click", closeChat);
-  
-  // 히스토리 인터페이스 뒤로 가기 버튼 이벤트 리스너
-  DOM.backFromHistoryBtn.addEventListener("click", function() {
-    DOM.chatHistoryContainer.style.display = "none";
-    DOM.appContainer.style.display = "flex";
-  });
-  
-  // 파일 업로드 버튼 이벤트 리스너
-  DOM.fileUploadBtn.addEventListener("click", function() {
-    DOM.fileUploadInput.click();
-  });
-  
-  // 파일 선택 이벤트 리스너
-  DOM.fileUploadInput.addEventListener("change", handleFileUpload);
-  
-  // 메시지 전송 버튼 이벤트 리스너
-  DOM.sendMessageBtn.addEventListener("click", sendMessage);
-  
-  // 채팅 입력창 엔터 키 이벤트 리스너
-  DOM.chatInputBox.addEventListener("keydown", function(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-  
-  // 채팅 입력창 붙여넣기 이벤트 리스너 (스크린샷 지원)
-  DOM.chatInputBox.addEventListener("paste", handlePaste);
-  
-  // 파일 드래그 앤 드롭 이벤트 리스너
-  setupDragAndDrop();
-  
   // AI 모델 저장 버튼 이벤트 리스너
   DOM.saveAiModelBtn.addEventListener("click", saveAiModelSettings);
      
@@ -298,16 +250,10 @@ window.startNewChat = startNewChat;
     DOM.initialLoader.style.display = "none";
     DOM.loginContainer.style.display = "flex";
   }, 1000);
-    // Firebase 초기화 후 추가
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-const auth = firebase.auth();
-const storage = firebase.storage();
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);  
 
-// 추가: Firebase 인증 상태 로그 출력
-console.log("Firebase 초기화 완료");
-auth.onAuthStateChanged(user => {
+  // 추가: Firebase 인증 상태 로그 출력
+  console.log("Firebase 초기화 완료");
+  auth.onAuthStateChanged(user => {
   console.log("인증 상태 변경:", user ? user.email : "로그아웃됨");
   
   // 로딩 스피너 숨기기
