@@ -32,7 +32,7 @@ let favorites = []; // 즐겨찾기 목록을 저장할 배열
 // ──────── 수정 후 ────────
 const DEFAULT_AI_CONFIG = {
   apiKey: "",                                // 빈 문자열(관리자 패널에서 입력)
-  model:  "gpt-4o-mini",                   // 일반 계정 기본값
+  model:  "gpt-4o",                   // 일반 계정 기본값
   maxTokens: 4000,
   temperature: 0.7
 };
@@ -235,9 +235,6 @@ document.addEventListener("DOMContentLoaded", function() {
   });
 
   document.getElementById("userExcelDownloadBtn").addEventListener("click", downloadUserExcel);
-  document.getElementById("userExcelUploadBtn").addEventListener("click", function(){
-    showUserExcelUploadModal();
-  });
 
   // 새 채팅 버튼 이벤트 리스너
 // script.js 242번째 줄 근처
@@ -467,6 +464,7 @@ function toggleSidebar() {
 
 // 관리자 패널 토글
 function toggleAdminPanel() {
+  if (!checkPermission("관리자")) return;
   isAdminPanelOpen = !isAdminPanelOpen;
   
   if (isAdminPanelOpen) {
@@ -479,9 +477,7 @@ function toggleAdminPanel() {
     // 사용자 관리 관련 DOM 요소 존재 확인
     console.log("adminContent 존재:", Boolean(document.getElementById("adminContent")));
     console.log("userListBtn 존재:", Boolean(document.getElementById("userListBtn")));
-    console.log("userRegisterBtn 존재:", Boolean(document.getElementById("userRegisterBtn")));
     console.log("userListTableBody 존재:", Boolean(document.getElementById("userListTableBody")));
-    console.log("userRegisterForm 존재:", Boolean(document.getElementById("userRegisterForm")));
     
     // 관리자 패널이 열릴 때 기본적으로 관리자 콘텐츠 영역 초기화
     const adminContent = document.getElementById("adminContent");
@@ -491,9 +487,7 @@ function toggleAdminPanel() {
     
     // 유저 관리 패널 초기화
     const userListPane = document.getElementById("adminUserListPane");
-    const userRegisterPane = document.getElementById("adminUserRegisterPane");
     if (userListPane) userListPane.style.display = "none";
-    if (userRegisterPane) userRegisterPane.style.display = "none";
   } else {
     DOM.adminPanel.classList.remove("open");
     DOM.adminPanelOverlay.classList.remove("open");
@@ -514,6 +508,7 @@ function loadAiModelSettings() {
 
 // AI 모델 설정 저장
 function saveAiModelSettings() {
+  if (!checkPermission("관리자")) return;
   const apiKey = DOM.apiKeyInput.value.trim();
   const model = DOM.modelSelect.value;
   const maxTokens = parseInt(DOM.maxTokensInput.value, 10);
@@ -665,22 +660,6 @@ function initUserManagement() {
     console.error("userListBtn 요소를 찾을 수 없습니다");
   }
   
-  // 유저 등록 버튼
-  const userRegisterBtn = document.getElementById("userRegisterBtn");
-  if (userRegisterBtn) {
-    // 기존 이벤트 리스너 제거 (중복 방지)
-    const newUserRegisterBtn = userRegisterBtn.cloneNode(true);
-    userRegisterBtn.parentNode.replaceChild(newUserRegisterBtn, userRegisterBtn);
-    
-    newUserRegisterBtn.addEventListener("click", function() {
-      console.log("유저 등록 버튼 클릭됨");
-      showUserRegistration();
-    });
-    console.log("유저 등록 버튼 이벤트 리스너 등록 완료");
-  } else {
-    console.error("userRegisterBtn 요소를 찾을 수 없습니다");
-  }
-  
   // 팝업창 관련 함수들 정의
   window.showPopup = function(title, content) {
     // 기존 팝업이 있으면 제거
@@ -752,96 +731,6 @@ function initUserManagement() {
   };
 
   // 유저 등록 폼 보여주기 함수
-  window.showUserRegistration = function() {
-    const content = `
-      <form id="popup-userRegisterForm">
-        <div class="form-group mb-4">
-          <label for="popup-registerName" class="form-label">이름</label>
-          <input id="popup-registerName" type="text" class="form-input" placeholder="이름 입력" required>
-        </div>
-        <div class="form-group mb-4">
-          <label for="popup-registerEmail" class="form-label">이메일</label>
-          <input id="popup-registerEmail" type="email" class="form-input" placeholder="이메일 입력" required>
-        </div>
-        <div class="form-group mb-4">
-          <label for="popup-registerRole" class="form-label">권한</label>
-          <select id="popup-registerRole" class="form-input" required>
-            <option value="">선택하세요</option>
-            <option value="사용자">사용자</option>
-            <option value="관리자">관리자</option>
-            <option value="슈퍼관리자">슈퍼관리자</option>
-          </select>
-        </div>
-        <div class="form-group mb-4">
-          <label for="popup-registerGroup" class="form-label">그룹</label>
-          <input id="popup-registerGroup" type="text" class="form-input" placeholder="그룹 입력" required>
-        </div>
-        <div class="form-group mb-4">
-          <label for="popup-registerPassword" class="form-label">비밀번호</label>
-          <input id="popup-registerPassword" type="password" class="form-input" placeholder="비밀번호 입력" required>
-        </div>
-        <button type="submit" class="btn-primary w-full">유저 등록</button>
-      </form>
-    `;
-    
-    showPopup("유저 등록", content);
-    
-    // 팝업 내 폼 이벤트 연결
-    document.getElementById("popup-userRegisterForm").addEventListener("submit", function(e) {
-      e.preventDefault();
-      
-      // 입력값 가져오기
-      const name = document.getElementById("popup-registerName").value.trim();
-      const email = document.getElementById("popup-registerEmail").value.trim();
-      const role = document.getElementById("popup-registerRole").value;
-      const group = document.getElementById("popup-registerGroup").value.trim();
-      const password = document.getElementById("popup-registerPassword").value;
-      
-      // 입력값 검증
-      if (!name || !email || !role || !group || !password) {
-        showToast("모든 필드를 입력해주세요.", true);
-        return;
-      }
-      
-      // Firebase Auth로 계정 생성
-      firebase.auth().createUserWithEmailAndPassword(email, password)
-        .then(function(userCredential) {
-          const user = userCredential.user;
-          
-          // 사용자 정보 생성
-          const userData = {
-            displayName: name,
-            email: email,
-            role: role,
-            group: group,
-            createdAt: new Date().toISOString()
-          };
-          
-          // Firebase DB에 사용자 정보 저장
-          return firebase.database().ref("users/" + user.uid).set(userData);
-        })
-        .then(function() {
-          showToast("유저 등록이 완료되었습니다.");
-          
-          // 폼 초기화
-          document.getElementById("popup-userRegisterForm").reset();
-          
-          // 팝업 닫기
-          const popup = document.getElementById("user-management-popup");
-          if (popup) {
-            document.body.removeChild(popup);
-          }
-          
-          // 유저 목록 보여주기
-          showUserList();
-        })
-        .catch(function(error) {
-          console.error("유저 등록 실패:", error);
-          showToast("유저 등록 실패: " + error.message, true);
-        });
-    });
-  };
-  
   // 유저 수정 함수
   window.showUserEdit = function(userId, userData) {
     // 유저 등록 폼과 동일한 구성으로 수정 폼을 생성(이메일은 수정하지 않도록 readonly 처리)
@@ -3690,87 +3579,12 @@ function downloadUserExcel() {
     });
 }
 
-// 사용자 엑셀 업로드 모달 표시 함수
-function showUserExcelUploadModal() {
-  const modal = document.getElementById("user-excel-upload-modal");
-  modal.style.display = "flex";
-}
-
-// 사용자 엑셀 업로드 모달 닫기 함수
-function closeUserExcelUploadModal() {
-  const modal = document.getElementById("user-excel-upload-modal");
-  modal.style.display = "none";
-}
-
-// 업로드 처리 함수
-function uploadUserExcel() {
-  const fileInput = document.getElementById("user-excel-file");
-  const file = fileInput.files[0];
-  if (!file) {
-    showToast("업로드할 파일을 선택하세요.", true);
-    return;
-  }
-  
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const data = new Uint8Array(e.target.result);
-    const workbook = XLSX.read(data, { type: 'array' });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-    // jsonData는 각 행이 객체로 구성되며, 필드 이름은 "이름", "이메일", "권한", "그룹"
-    jsonData.forEach(function(item) {
-      // 이메일을 기준으로 기존 유저가 있는지 검색
-      const query = firebase.database().ref("users").orderByChild("email").equalTo(item["이메일"]);
-      query.once("value")
-        .then(function(snapshot) {
-          if (snapshot.exists()) {
-            // 기존 유저가 있으면 업데이트 (이름, 권한, 그룹)
-            snapshot.forEach(function(childSnapshot) {
-              childSnapshot.ref.update({
-                displayName: item["이름"] || "",
-                role: item["권한"] || "",
-                group: item["그룹"] || ""
-              });
-            });
-          } else {
-            // 신규 유저일 경우, 새로 추가 (비밀번호는 따로 설정 필요 시 처리)
-            const newUserRef = firebase.database().ref("users").push();
-            newUserRef.set({
-              displayName: item["이름"] || "",
-              email: item["이메일"] || "",
-              role: item["권한"] || "",
-              group: item["그룹"] || "",
-              createdAt: new Date().toISOString()
-            });
-          }
-        })
-        .catch(function(error) {
-          console.error("Excel 업로드 중 오류:", error);
-        });
-    });
-    
-    showToast("사용자 엑셀 업로드가 완료되었습니다.");
-    closeUserExcelUploadModal();
-    // 변경된 사용자 데이터 반영을 위해 유저 목록 다시 로드
-    drawUserListForPopup();
-  };
-  reader.readAsArrayBuffer(file);
-}
-
 function showExcelUploadModal() {
   document.getElementById("excel-upload-modal").style.display = "flex";
 }
 
 function closeExcelUploadModal() {
   document.getElementById("excel-upload-modal").style.display = "none";
-}
-
-function showUserExcelUploadModal() {
-  document.getElementById("user-excel-upload-modal").style.display = "flex";
-}
-
-function closeUserExcelUploadModal() {
-  document.getElementById("user-excel-upload-modal").style.display = "none";
 }
 
 /****************************************
