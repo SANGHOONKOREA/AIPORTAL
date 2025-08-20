@@ -158,21 +158,25 @@ async function generateAIResponse() {
     DOM.chatMessages.removeChild(loadingEl);
     
     // 응답 처리
-    if (response && response.choices && response.choices.length > 0) {
+    if (response && (response.output_text || (response.output && response.output.length > 0))) {
       // API 응답에서 텍스트 내용 추출
       let responseContent = "";
-      const responseMessage = response.choices[0].message;
-      
-      // OpenAI 응답 형식에 따라 처리
-      if (Array.isArray(responseMessage.content)) {
-        // 여러 형식의 콘텐츠가 있는 경우 (멀티모달 응답)
-        responseContent = responseMessage.content
-          .filter(item => item.type === "text")
-          .map(item => item.text)
+
+      if (response.output_text) {
+        responseContent = response.output_text;
+      } else if (Array.isArray(response.output)) {
+        responseContent = response.output
+          .map(part => {
+            const items = part.content || [];
+            if (Array.isArray(items)) {
+              return items
+                .filter(i => i.type === "output_text")
+                .map(i => i.text)
+                .join("\n");
+            }
+            return "";
+          })
           .join("\n");
-      } else {
-        // 단순 텍스트 응답인 경우
-        responseContent = responseMessage.content;
       }
       
       const assistantMessage = {
@@ -229,27 +233,24 @@ function prepareMessagesForAPI(messages) {
     // 텍스트 내용이 있으면 추가
     if (msg.content && msg.content.trim()) {
       apiMessage.content.push({
-        type: "text",
+        type: "input_text",
         text: msg.content
       });
     }
     
-    // 파일이 있는 경우 이미지로 추가
+    // 파일이 있는 경우 처리
     if (msg.files && msg.files.length > 0) {
       msg.files.forEach(file => {
         if (file.type.startsWith('image/')) {
-          // 이미지 파일인 경우 이미지 객체 추가
+          // 이미지 파일은 input_image 형식으로 추가
           apiMessage.content.push({
-            type: "image_url",
-            image_url: {
-              url: file.dataUrl, // base64 이미지 데이터
-              detail: "auto"     // 이미지 분석 상세도 설정
-            }
+            type: "input_image",
+            image_url: file.dataUrl
           });
         } else {
-          // 이미지가 아닌 파일은 참조만 추가
+          // 기타 파일은 텍스트로 표시
           apiMessage.content.push({
-            type: "text",
+            type: "input_text",
             text: `[첨부 파일: ${file.name}]`
           });
         }
@@ -259,7 +260,7 @@ function prepareMessagesForAPI(messages) {
     // content가 비어있으면 기본 텍스트 추가
     if (apiMessage.content.length === 0) {
       apiMessage.content.push({
-        type: "text",
+        type: "input_text",
         text: ""
       });
     }
@@ -304,8 +305,8 @@ async function fetchAIResponse(messages) {
   try {
     console.log("API에 전송할 메시지:", messages);
     
-    // OpenAI API 호출
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // OpenAI Responses API 호출
+    const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -313,8 +314,8 @@ async function fetchAIResponse(messages) {
       },
       body: JSON.stringify({
         model: aiConfig.model,
-        messages: messages,
-        max_tokens: aiConfig.maxTokens,
+        input: messages,
+        max_output_tokens: aiConfig.maxTokens,
         temperature: aiConfig.temperature
       })
     });
@@ -342,12 +343,7 @@ async function simulateAPIResponse(messages) {
   return new Promise(resolve => {
     setTimeout(() => {
       resolve({
-        choices: [{
-          message: {
-            role: 'assistant',
-            content: '개발 환경에서 생성된 테스트 응답입니다.'
-          }
-        }]
+        output_text: '개발 환경에서 생성된 테스트 응답입니다.'
       });
     }, 1000);
   });
