@@ -17,44 +17,9 @@ let activeFiles = []; // 활성 채팅에 포함된 파일 목록
 
 // 채팅 시작
 function startNewChat() {
-  // 이미 채팅이 진행 중이면 저장 확인
-  if (activeChatId && chatMessages.length > 0) {
-    saveChatHistory(activeChatId, chatMessages);
-  }
-  
-  // 새 채팅 ID 생성
-  activeChatId = Date.now().toString();
-  chatMessages = [];
-  activeFiles = [];
-  
-  // 파일 초기화
-  uploadedFiles = [];
-  updateFilePreviewArea();
-  
-  // 채팅 입력창 초기화
-  DOM.chatInputBox.innerHTML = '';
-  
-  // 채팅 인터페이스 초기화
-  DOM.chatMessages.innerHTML = '';
-  DOM.chatTitle.textContent = "새 채팅";
-  
-  // 채팅 화면 표시
-  DOM.appContainer.style.display = "none";
-  DOM.chatHistoryContainer.style.display = "none";
-  DOM.gptChatContainer.style.display = "flex";
-  
-  // AI 모델 설정을 화면에 표시
-  const welcomeMsg = createSystemMessage(
-    `안녕하세요! 무엇을 도와드릴까요?<br>
-    <small class="text-gray-500">(현재 사용 중인 모델: ${aiConfig.model})</small>`
-  );
-  DOM.chatMessages.appendChild(welcomeMsg);
-  
-  // 채팅 입력창 포커스
-  setTimeout(() => DOM.chatInputBox.focus(), 100);
-  
-  // 채팅 활동 로깅
-  logUserActivity("start_new_chat");
+  // 현재는 채팅 기능을 지원하지 않음
+  showToast('당분간 지원되지 않습니다.', true);
+  return;
 }
 
 // 채팅 인터페이스 닫기
@@ -491,108 +456,8 @@ function saveChatTitle(chatId, title) {
 
 // 채팅 히스토리 보기
 function showChatHistory() {
-  if (!currentUid) return;
-  
-  // 인터페이스 전환
-  DOM.appContainer.style.display = "none";
-  DOM.gptChatContainer.style.display = "none";
-  DOM.chatHistoryContainer.style.display = "flex";
-  
-  // 히스토리 목록 영역 초기화
-  DOM.historyList.innerHTML = `
-    <div class="flex items-center justify-center h-64">
-      <div class="text-center">
-        <div class="w-12 h-12 border-4 border-gray-200 dark:border-gray-700 border-t-blue-500 rounded-full inline-block animate-spin"></div>
-        <p class="mt-4 text-gray-600 dark:text-gray-300">채팅 히스토리 로딩 중...</p>
-      </div>
-    </div>
-  `;
-  
-  // Firebase에서 채팅 히스토리 로드
-  db.ref(`chatHistory/${currentUid}`)
-    .orderByChild("updatedAt")
-    .once("value")
-    .then(snapshot => {
-      // 히스토리 영역 초기화
-      DOM.historyList.innerHTML = "";
-      
-      // 데이터가 없는 경우
-      if (!snapshot.exists()) {
-        DOM.historyList.innerHTML = `
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
-            <div class="mb-4">
-              <i class="fas fa-history text-4xl text-gray-400 dark:text-gray-500"></i>
-            </div>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">채팅 히스토리 없음</h3>
-            <p class="text-gray-500 dark:text-gray-400">아직 채팅 히스토리가 없습니다. 새 채팅을 시작해보세요.</p>
-            <button onclick="startNewChat()" class="mt-4 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none">
-              <i class="fas fa-plus-circle mr-2"></i> 새 채팅
-            </button>
-          </div>
-        `;
-        return;
-      }
-      
-      // 채팅 항목 정렬 (최신순)
-      const chats = [];
-      snapshot.forEach(childSnapshot => {
-        chats.push(childSnapshot.val());
-      });
-      
-      // 최신순 정렬
-      chats.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-      
-      // 히스토리 목록 생성
-      const historyItems = chats.map(chat => {
-        // 채팅 제목 (없으면 첫 메시지 내용으로)
-        const title = chat.title || "새 채팅";
-        
-        // 미리보기 내용 (첫 메시지 내용)
-        let preview = "";
-        if (chat.messages && chat.messages.length > 0) {
-          const firstUserMessage = chat.messages.find(msg => msg.role === 'user');
-          if (firstUserMessage) {
-            preview = firstUserMessage.content.substring(0, 100) + (firstUserMessage.content.length > 100 ? "..." : "");
-          }
-        }
-        
-        // 날짜 포맷팅
-        const date = new Date(chat.updatedAt);
-        const formattedDate = date.toLocaleDateString([], { 
-          year: 'numeric', 
-          month: 'short', 
-          day: 'numeric' 
-        });
-        
-        // 히스토리 아이템 템플릿
-        return `
-          <div class="chat-history-item" onclick="loadChat('${chat.id}')">
-            <h3 class="chat-history-title">${title}</h3>
-            <p class="chat-history-preview">${preview}</p>
-            <p class="chat-history-time">${formattedDate}</p>
-          </div>
-        `;
-      }).join("");
-      
-      // 히스토리 목록 추가
-      DOM.historyList.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          ${historyItems}
-        </div>
-      `;
-    })
-    .catch(err => {
-      console.error("채팅 히스토리 로드 실패:", err);
-      DOM.historyList.innerHTML = `
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
-          <div class="mb-4">
-            <i class="fas fa-exclamation-circle text-4xl text-red-500"></i>
-          </div>
-          <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">데이터 로드 실패</h3>
-          <p class="text-gray-500 dark:text-gray-400">채팅 히스토리를 불러오는 데 실패했습니다. 다시 시도해 주세요.</p>
-        </div>
-      `;
-    });
+  // 현재는 히스토리 기능을 지원하지 않음
+  showToast('당분간 지원되지 않습니다.', true);
 }
 
 // 채팅 히스토리에서 채팅 불러오기
