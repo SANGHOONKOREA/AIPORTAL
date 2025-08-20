@@ -1,0 +1,8 @@
+{
+  "name": "aiportal",
+  "version": "1.0.0",
+  "description": "Admin portal with AI chat features",
+  "scripts": {
+    "test": "echo \"No tests specified\""
+  }
+}

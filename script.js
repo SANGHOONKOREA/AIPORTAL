@@ -32,7 +32,7 @@ let favorites = []; // 즐겨찾기 목록을 저장할 배열
 // ──────── 수정 후 ────────
 const DEFAULT_AI_CONFIG = {
   apiKey: "",                                // 빈 문자열(관리자 패널에서 입력)
-  model:  "gpt-5",                     // 최신 GPT-5 기본값
+  model:  "gpt-4o",                    // 안정적인 GPT-4o 기본값
   maxTokens: 4000,
   temperature: 0.7
 };
