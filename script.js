@@ -607,20 +607,22 @@ function initUserManagement() {
   }
   
   // 팝업창 관련 함수들 정의
-  window.showPopup = function(title, content) {
+  window.showPopup = function(title, content, options = {}) {
+    const maxWidth = options.maxWidth || 'max-w-xl';
+
     // 기존 팝업이 있으면 제거
     const existingPopup = document.getElementById("user-management-popup");
     if (existingPopup) {
       document.body.removeChild(existingPopup);
     }
-    
+
     // 새 팝업 생성
     const popup = document.createElement("div");
     popup.id = "user-management-popup";
     popup.className = "fixed inset-0 flex items-center justify-center z-50";
     popup.innerHTML = `
       <div class="fixed inset-0 bg-black opacity-50"></div>
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-xl w-full relative z-10">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 ${maxWidth} w-full relative z-10">
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-lg font-medium text-gray-900 dark:text-white">${title}</h3>
           <button id="close-popup" class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
@@ -653,27 +655,38 @@ function initUserManagement() {
   window.showUserList = function() {
     const content = `
       <div class="user-list">
-        <table class="min-w-full border">
-          <thead class="bg-gray-100 dark:bg-gray-700">
-            <tr>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이름</th>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이메일</th>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">권한</th>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">그룹</th>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">관리</th>
-            </tr>
-          </thead>
-          <tbody id="popup-userListTableBody">
-            <!-- drawUserListForPopup() 함수에서 동적으로 채워집니다. -->
-          </tbody>
-        </table>
+        <div class="overflow-x-auto">
+          <table class="min-w-full border text-sm">
+            <thead class="bg-gray-100 dark:bg-gray-700">
+              <tr>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">ID</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이름</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이메일</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">권한</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">그룹</th>
+              </tr>
+            </thead>
+            <tbody id="popup-userListTableBody">
+              <!-- drawUserListForPopup() 함수에서 동적으로 채워집니다. -->
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4 text-right">
+          <button id="saveAllUsersBtn" class="btn-primary px-4 py-2">전체 저장</button>
+        </div>
       </div>
     `;
-    
-    showPopup("유저 목록", content);
-    
+
+    showPopup("유저 목록", content, { maxWidth: 'max-w-4xl' });
+
     // 팝업에 유저 목록 로드
     drawUserListForPopup();
+
+    // 저장 버튼 이벤트
+    const saveBtn = document.getElementById('saveAllUsersBtn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', saveAllUserChanges);
+    }
   };
 
   // 유저 등록 폼 보여주기 함수
@@ -694,7 +707,7 @@ function initUserManagement() {
           <label for="popup-editRole" class="form-label">권한</label>
           <select id="popup-editRole" class="form-input" required>
             <option value="">선택하세요</option>
-            <option value="사용자" ${userData.role === "사용자" ? "selected" : ""}>사용자</option>
+            <option value="본사" ${userData.role === "본사" ? "selected" : ""}>본사</option>
             <option value="관리자" ${userData.role === "관리자" ? "selected" : ""}>관리자</option>
             <option value="슈퍼관리자" ${userData.role === "슈퍼관리자" ? "selected" : ""}>슈퍼관리자</option>
           </select>
@@ -790,10 +803,10 @@ function drawUserListForPopup() {
     console.error("popup-userListTableBody 요소를 찾을 수 없습니다.");
     return;
   }
-  
+
   // 테이블 내용 비우기
   tbody.innerHTML = "";
-  
+
   // 로딩 상태 표시
   tbody.innerHTML = `
     <tr>
@@ -805,13 +818,13 @@ function drawUserListForPopup() {
       </td>
     </tr>
   `;
-  
+
   // Firebase에서 유저 데이터 가져오기
   firebase.database().ref("users").once("value")
     .then(function(snapshot) {
       // 로딩 메시지 제거
       tbody.innerHTML = "";
-      
+
       if (!snapshot.exists() || snapshot.numChildren() === 0) {
         tbody.innerHTML = `
           <tr>
@@ -822,47 +835,62 @@ function drawUserListForPopup() {
         `;
         return;
       }
-      
+
       snapshot.forEach(function(childSnapshot) {
         const user = childSnapshot.val();
         const userId = childSnapshot.key; // Firebase에서 유저의 key를 id로 사용
+
+        // 역할이 '협력사'인 경우 표시하지 않음
+        if (user.role === '협력사') return;
+
         const tr = document.createElement("tr");
-        
-        // 각 컬럼 생성
+        tr.setAttribute('data-user-id', userId);
+
+        // ID
+        const tdId = document.createElement('td');
+        tdId.className = 'px-4 py-2 border';
+        tdId.textContent = userId;
+
+        // 이름
         const tdName = document.createElement("td");
         tdName.className = "px-4 py-2 border";
         tdName.textContent = user.displayName || "";
-        
+
+        // 이메일
         const tdEmail = document.createElement("td");
         tdEmail.className = "px-4 py-2 border";
         tdEmail.textContent = user.email || "";
-        
+
+        // 권한
         const tdRole = document.createElement("td");
         tdRole.className = "px-4 py-2 border";
-        tdRole.textContent = user.role || "";
-        
+        const roleSelect = document.createElement('select');
+        roleSelect.className = 'form-input';
+        const roles = ['본사', '관리자', '슈퍼관리자'];
+        roles.forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r;
+          opt.textContent = r;
+          roleSelect.appendChild(opt);
+        });
+        roleSelect.value = roles.includes(user.role) ? user.role : '본사';
+        tdRole.appendChild(roleSelect);
+
+        // 그룹
         const tdGroup = document.createElement("td");
         tdGroup.className = "px-4 py-2 border";
-        tdGroup.textContent = user.groups ? user.groups.join(', ') : (user.group || "");
-        
-        const tdEdit = document.createElement("td");
-        tdEdit.className = "px-4 py-2 border text-center";
-        // 수정 버튼 생성
-        const editBtn = document.createElement("button");
-        editBtn.className = "btn-primary px-3 py-1 text-sm";
-        editBtn.textContent = "수정";
-        editBtn.addEventListener("click", function() {
-          showUserEdit(userId, user);
-        });
-        tdEdit.appendChild(editBtn);
-        
+        tdGroup.innerHTML = chatbotGroups.map(g => {
+          const checked = (user.groups && user.groups.includes(g.id.toString())) || (user.group && user.group === g.name);
+          return `<label class="inline-flex items-center mr-2"><input type="checkbox" value="${g.id}" class="form-checkbox" ${checked ? 'checked' : ''}><span class="ml-1">${g.name}</span></label>`;
+        }).join(' ');
+
         // 행에 컬럼 추가
+        tr.appendChild(tdId);
         tr.appendChild(tdName);
         tr.appendChild(tdEmail);
         tr.appendChild(tdRole);
         tr.appendChild(tdGroup);
-        tr.appendChild(tdEdit);
-        
+
         // 테이블에 행 추가
         tbody.appendChild(tr);
       });
@@ -878,6 +906,41 @@ function drawUserListForPopup() {
         </tr>
       `;
       showToast("유저 목록 로딩 실패: " + error.message, true);
+    });
+}
+
+// 유저 목록 변경사항 저장
+function saveAllUserChanges() {
+  const tbody = document.getElementById('popup-userListTableBody');
+  if (!tbody) return;
+
+  const updatePromises = [];
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const userId = tr.getAttribute('data-user-id');
+    if (!userId) return;
+
+    const roleSelect = tr.querySelector('select');
+    const role = roleSelect ? roleSelect.value : '';
+
+    const groups = Array.from(tr.querySelectorAll('input[type="checkbox"]'))
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+
+    updatePromises.push(
+      firebase.database().ref('users/' + userId).update({
+        role: role,
+        groups: groups
+      })
+    );
+  });
+
+  Promise.all(updatePromises)
+    .then(() => {
+      showToast('유저 정보가 저장되었습니다.');
+    })
+    .catch(error => {
+      console.error('유저 정보 저장 실패:', error);
+      showToast('유저 정보 저장 실패: ' + error.message, true);
     });
 }
 
