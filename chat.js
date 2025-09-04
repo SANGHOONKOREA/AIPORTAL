@@ -153,49 +153,55 @@ async function generateAIResponse() {
     
     // API 요청
     const response = await fetchAIResponse(apiMessages);
-    
+
     // 로딩 인디케이터 제거
     DOM.chatMessages.removeChild(loadingEl);
-    
+
     // 응답 처리
-    if (response && response.choices && response.choices.length > 0) {
-      // API 응답에서 텍스트 내용 추출
-      let responseContent = "";
+    let responseContent = "";
+
+    // v1/responses API 형식 처리
+    if (response && Array.isArray(response.output)) {
+      const firstOutput = response.output[0];
+      if (firstOutput && Array.isArray(firstOutput.content)) {
+        responseContent = firstOutput.content
+          .filter(item => item.type === "text")
+          .map(item => item.text)
+          .join("\n");
+      }
+    } else if (response && response.choices && response.choices.length > 0) {
+      // 기존 chat.completions 형식 처리 (하위 호환)
       const responseMessage = response.choices[0].message;
-      
-      // OpenAI 응답 형식에 따라 처리
       if (Array.isArray(responseMessage.content)) {
-        // 여러 형식의 콘텐츠가 있는 경우 (멀티모달 응답)
         responseContent = responseMessage.content
           .filter(item => item.type === "text")
           .map(item => item.text)
           .join("\n");
       } else {
-        // 단순 텍스트 응답인 경우
         responseContent = responseMessage.content;
-      }
-      
-      const assistantMessage = {
-        role: 'assistant',
-        content: responseContent,
-        timestamp: new Date().toISOString()
-      };
-      
-      // 메시지 목록에 추가
-      chatMessages.push(assistantMessage);
-      
-      // 메시지 UI에 추가
-      appendMessageToUI(assistantMessage);
-      
-      // 채팅 저장
-      saveChatHistory(activeChatId, chatMessages);
-      
-      // 제목 업데이트 (첫 번째 메시지인 경우)
-      if (chatMessages.length === 2 && DOM.chatTitle.textContent === "새 채팅") {
-        updateChatTitle();
       }
     } else {
       throw new Error("API 응답이 올바르지 않습니다.");
+    }
+
+    const assistantMessage = {
+      role: 'assistant',
+      content: responseContent,
+      timestamp: new Date().toISOString()
+    };
+
+    // 메시지 목록에 추가
+    chatMessages.push(assistantMessage);
+
+    // 메시지 UI에 추가
+    appendMessageToUI(assistantMessage);
+
+    // 채팅 저장
+    saveChatHistory(activeChatId, chatMessages);
+
+    // 제목 업데이트 (첫 번째 메시지인 경우)
+    if (chatMessages.length === 2 && DOM.chatTitle.textContent === "새 채팅") {
+      updateChatTitle();
     }
   } catch (error) {
     console.error("AI 응답 생성 실패:", error);
@@ -210,7 +216,7 @@ async function generateAIResponse() {
     
     chatMessages.push(errorMessage);
     appendMessageToUI(errorMessage);
-    showToast("응답 생성 중 오류가 발생했습니다.", true);
+    showToast(error.message || "응답 생성 중 오류가 발생했습니다.", true);
   } finally {
     isGeneratingResponse = false;
   }
@@ -298,14 +304,18 @@ function fileToDataURL(file) {
 async function fetchAIResponse(messages) {
   // 개발 환경에서는 하드코딩된 응답 반환 (실제 API 호출 대신)
   if (isDevelopmentMode()) {
-    return simulateAPIResponse(messages);  // await만 사용하거나 괄호를 정확히 맞춰야 합니다
+    return simulateAPIResponse(messages);
   }
-  
+
+  if (!aiConfig.apiKey) {
+    throw new Error('OpenAI API 키가 설정되지 않았습니다.');
+  }
+
   try {
     console.log("API에 전송할 메시지:", messages);
-    
-    // OpenAI API 호출
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+
+    // OpenAI Responses API 호출
+    const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -313,17 +323,17 @@ async function fetchAIResponse(messages) {
       },
       body: JSON.stringify({
         model: aiConfig.model,
-        messages: messages,
-        max_tokens: aiConfig.maxTokens,
+        input: messages,
+        max_output_tokens: aiConfig.maxTokens,
         temperature: aiConfig.temperature
       })
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(`API 오류: ${errorData.error?.message || response.statusText}`);
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error("API 호출 실패:", error);
