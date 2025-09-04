@@ -939,9 +939,20 @@ auth.onAuthStateChanged(user => {
         }
       })
       .then(userData => {
-        // 사용자 권한 저장 및 UI 업데이트
+        const allowedRoles = ["본사", "관리자", "슈퍼관리자"];
+        if (!allowedRoles.includes(userData.role)) {
+          showLoginError("본사 또는 관리자만 로그인할 수 있습니다.");
+          auth.signOut();
+          localStorage.removeItem('isLoggedIn');
+          DOM.loginBtn.disabled = false;
+          DOM.loginBtn.innerHTML = "로그인";
+          return;
+        }
+
+        // 로그인 허용: 상태 저장 및 UI 업데이트
+        localStorage.setItem('isLoggedIn', 'true');
         userRole = userData.role;
-        
+
         // UI 업데이트: 로그인 화면 숨기고 앱 컨테이너 표시
         DOM.loginContainer.style.display = "none";
         DOM.appContainer.style.display = "flex";
@@ -1081,15 +1092,7 @@ function handleLogin() {
   // 영구 로그인 설정 후 로그인 시도
   auth.setPersistence(persistence)
     .then(() => {
-      return auth.signInWithEmailAndPassword(emailVal, pwVal)
-        .then(() => {
-          // 로그인 성공 시 localStorage에 상태 저장
-          localStorage.setItem('isLoggedIn', 'true');
-          
-          // 페이지 새로고침 대신 UI 직접 전환 (옵션)
-          DOM.loginContainer.style.display = "none";
-          DOM.appContainer.style.display = "flex";
-        });
+      return auth.signInWithEmailAndPassword(emailVal, pwVal);
     })
     .catch(err => {
       console.error("로그인 실패:", err);
@@ -1107,10 +1110,10 @@ function handleLogin() {
         errorMessage = "너무 많은 로그인 시도로 계정이 일시적으로 잠겼습니다. 잠시 후 다시 시도해주세요.";
       else if (err.code === "auth/network-request-failed")
         errorMessage = "네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요.";
-      
+
       showLoginError(errorMessage);
       localStorage.removeItem('isLoggedIn'); // 로그인 실패 시 상태 제거
-      
+
       // 버튼 상태 복원
       DOM.loginBtn.disabled = false;
       DOM.loginBtn.innerHTML = "로그인";
