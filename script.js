@@ -100,9 +100,7 @@ const DOM = {
   excelFileInput: document.getElementById("excel-file"),
   excelFilename: document.getElementById("excel-filename"),
   
-  // GPT 채팅 관련 DOM 요소
-  gptChatContainer: document.getElementById("gpt-chat-container"),
-  chatHistoryContainer: document.getElementById("chat-history-container"),
+  // GPT 채팅 관련 DOM 요소 (사용 안 함)
   chatMessages: document.getElementById("chat-messages"),
   historyList: document.getElementById("history-list"),
   chatInputBox: document.getElementById("chat-input-box"),
@@ -957,9 +955,6 @@ auth.onAuthStateChanged(user => {
         DOM.loginContainer.style.display = "none";
         DOM.appContainer.style.display = "flex";
         
-        // 여기에 DOM 요소 참조 확인 및 이벤트 리스너 재설정 추가
-        setTimeout(ensureDOMElements, 500);
-        
         // 사용자 정보 표시
         DOM.userNameEl.textContent = userData.displayName || userData.email;
         DOM.userRoleEl.textContent = userData.role;
@@ -1026,8 +1021,6 @@ auth.onAuthStateChanged(user => {
     
     // UI 업데이트: 앱 컨테이너 숨기고 로그인 화면 표시
     DOM.appContainer.style.display = "none";
-    DOM.gptChatContainer.style.display = "none";
-    DOM.chatHistoryContainer.style.display = "none";
     DOM.loginContainer.style.display = "flex";
   }
 });
