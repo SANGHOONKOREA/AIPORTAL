@@ -1018,9 +1018,9 @@ auth.onAuthStateChanged(user => {
         }
       })
       .then(userData => {
-        const allowedRoles = ["본사"];
+        const allowedRoles = ["본사", "관리자", "슈퍼관리자"];
         if (!allowedRoles.includes(userData.role)) {
-          showLoginError("본사 권한만 로그인할 수 있습니다.");
+          showLoginError("본사, 관리자 또는 슈퍼관리자 권한만 로그인할 수 있습니다.");
           auth.signOut();
           localStorage.removeItem('isLoggedIn');
           DOM.loginBtn.disabled = false;
