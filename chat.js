@@ -313,6 +313,18 @@ async function fetchAIResponse(messages) {
   try {
     console.log("API에 전송할 메시지:", messages);
 
+    // 요청 본문 구성
+    const requestBody = {
+      model: aiConfig.model,
+      input: messages,
+      max_output_tokens: aiConfig.maxTokens
+    };
+
+    // gpt-5 모델은 temperature 파라미터를 지원하지 않으므로 제외
+    if (aiConfig.model !== "gpt-5" && aiConfig.temperature !== undefined) {
+      requestBody.temperature = aiConfig.temperature;
+    }
+
     // OpenAI Responses API 호출
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
@@ -320,12 +332,7 @@ async function fetchAIResponse(messages) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${aiConfig.apiKey}`
       },
-      body: JSON.stringify({
-        model: aiConfig.model,
-        input: messages,
-        max_output_tokens: aiConfig.maxTokens,
-        temperature: aiConfig.temperature
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
