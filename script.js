@@ -3603,94 +3603,10 @@ function addGlobalFavoriteStyles() {
     .favorite-toggle.active .fa-star {
       color: #f59e0b !important;
     }
-    
+
     .favorite-toggle:not(.active) .fa-star {
       color: #94a3b8 !important;
     }
   `;
   document.head.appendChild(styleElement);
 }
-
-// DOM 요소 참조 확인 및 재시도 함수
-function ensureDOMElements() {
-  // 핵심 채팅 관련 DOM 요소 참조 갱신
-  DOM.newChatBtn = document.getElementById("new-chat-btn");
-  DOM.chatHistoryBtn = document.getElementById("chat-history-btn");
-  DOM.gptChatContainer = document.getElementById("gpt-chat-container");
-  DOM.chatHistoryContainer = document.getElementById("chat-history-container");
-  DOM.chatMessages = document.getElementById("chat-messages");
-  DOM.historyList = document.getElementById("history-list");
-  DOM.chatInputBox = document.getElementById("chat-input-box");
-  DOM.sendMessageBtn = document.getElementById("send-message-btn");
-  DOM.fileUploadBtn = document.getElementById("file-upload-btn");
-  DOM.fileUploadInput = document.getElementById("file-upload-input");
-  DOM.filePreviewArea = document.getElementById("file-preview-area");
-  DOM.backToHomeBtn = document.getElementById("back-to-home");
-  DOM.backFromHistoryBtn = document.getElementById("back-from-history");
-  DOM.chatTitle = document.getElementById("chat-title");
-  
-  // 참조가 제대로 설정되었는지 로그로 확인
-  console.log("DOM 요소 참조 확인:", {
-    newChatBtn: Boolean(DOM.newChatBtn),
-    chatHistoryBtn: Boolean(DOM.chatHistoryBtn),
-    gptChatContainer: Boolean(DOM.gptChatContainer),
-    chatHistoryContainer: Boolean(DOM.chatHistoryContainer)
-  });
-  
-  // 새 채팅 버튼과 채팅 히스토리 버튼에 이벤트 리스너 다시 등록
-  if (DOM.newChatBtn) {
-    // 기존 이벤트 리스너 제거 (중복 방지)
-    const newChatBtnClone = DOM.newChatBtn.cloneNode(true);
-    DOM.newChatBtn.parentNode.replaceChild(newChatBtnClone, DOM.newChatBtn);
-    DOM.newChatBtn = newChatBtnClone;
-    
-    // 새 이벤트 리스너 등록
-    DOM.newChatBtn.addEventListener("click", function(e) {
-      e.preventDefault();
-      console.log("새 채팅 버튼 클릭됨 (재등록)");
-      window.startNewChat(); // 전역 객체에서 함수 참조
-    });
-  }
-  
-  if (DOM.chatHistoryBtn) {
-    // 기존 이벤트 리스너 제거 (중복 방지)
-    const chatHistoryBtnClone = DOM.chatHistoryBtn.cloneNode(true);
-    DOM.chatHistoryBtn.parentNode.replaceChild(chatHistoryBtnClone, DOM.chatHistoryBtn);
-    DOM.chatHistoryBtn = chatHistoryBtnClone;
-    
-    // 새 이벤트 리스너 등록
-    DOM.chatHistoryBtn.addEventListener("click", function(e) {
-      e.preventDefault();
-      console.log("채팅 히스토리 버튼 클릭됨 (재등록)");
-      window.showChatHistory(); // 전역 객체를 통해 접근
-    });
-  }
-}
-
-// 직접 DOM 요소 클릭 강제 함수 (디버깅 및 문제 해결용)
-function forceClickNewChat() {
-  const btn = document.getElementById("new-chat-btn");
-  if (btn) {
-    console.log("새 채팅 버튼 강제 클릭");
-    btn.click();
-  } else {
-    console.error("새 채팅 버튼을 찾을 수 없음");
-  }
-}
-
-function forceClickChatHistory() {
-  const btn = document.getElementById("chat-history-btn");
-  if (btn) {
-    console.log("채팅 히스토리 버튼 강제 클릭");
-    btn.click();
-  } else {
-    console.error("채팅 히스토리 버튼을 찾을 수 없음");
-  }
-}
-
-// window 객체에 디버깅 함수 추가
-window.debugChat = {
-  forceClickNewChat,
-  forceClickChatHistory,
-  ensureDOMElements
-};
