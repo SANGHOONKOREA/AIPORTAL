@@ -161,11 +161,13 @@ async function generateAIResponse() {
     let responseContent = "";
 
     // v1/responses API 형식 처리
-    if (response && Array.isArray(response.output)) {
+    if (response && typeof response.output_text === "string") {
+      responseContent = response.output_text;
+    } else if (response && Array.isArray(response.output)) {
       const firstOutput = response.output[0];
       if (firstOutput && Array.isArray(firstOutput.content)) {
         responseContent = firstOutput.content
-          .filter(item => item.type === "text")
+          .filter(item => item.type === "output_text")
           .map(item => item.text)
           .join("\n");
       }
@@ -235,7 +237,7 @@ function prepareMessagesForAPI(messages) {
     // 텍스트 내용이 있으면 추가
     if (msg.content && msg.content.trim()) {
       apiMessage.content.push({
-        type: "text",
+        type: "input_text",
         text: msg.content
       });
     }
@@ -246,16 +248,13 @@ function prepareMessagesForAPI(messages) {
         if (file.type.startsWith('image/')) {
           // 이미지 파일인 경우 이미지 객체 추가
           apiMessage.content.push({
-            type: "image_url",
-            image_url: {
-              url: file.dataUrl, // base64 이미지 데이터
-              detail: "auto"     // 이미지 분석 상세도 설정
-            }
+            type: "input_image",
+            image_url: file.dataUrl
           });
         } else {
           // 이미지가 아닌 파일은 참조만 추가
           apiMessage.content.push({
-            type: "text",
+            type: "input_text",
             text: `[첨부 파일: ${file.name}]`
           });
         }
@@ -265,7 +264,7 @@ function prepareMessagesForAPI(messages) {
     // content가 비어있으면 기본 텍스트 추가
     if (apiMessage.content.length === 0) {
       apiMessage.content.push({
-        type: "text",
+        type: "input_text",
         text: ""
       });
     }
