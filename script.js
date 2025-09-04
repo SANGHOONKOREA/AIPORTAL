@@ -97,12 +97,11 @@ const DOM = {
   closeExcelModalBtn: document.getElementById("close-excel-modal"),
   cancelExcelUploadBtn: document.getElementById("cancel-excel-upload"),
   confirmExcelUploadBtn: document.getElementById("confirm-excel-upload"),
+  botStatsBtn: document.getElementById("botStatsBtn"),
   excelFileInput: document.getElementById("excel-file"),
   excelFilename: document.getElementById("excel-filename"),
   
-  // GPT 채팅 관련 DOM 요소
-  gptChatContainer: document.getElementById("gpt-chat-container"),
-  chatHistoryContainer: document.getElementById("chat-history-container"),
+  // GPT 채팅 관련 DOM 요소 (사용 안 함)
   chatMessages: document.getElementById("chat-messages"),
   historyList: document.getElementById("history-list"),
   chatInputBox: document.getElementById("chat-input-box"),
@@ -279,9 +278,10 @@ document.addEventListener("DOMContentLoaded", function() {
     updateLoginState(false);
   }
 });
-  // 유저 관리 기능 초기화 추가
+  // 유저 관리 기능 및 통계 초기화 추가
   initUserManagement();
-  
+  initBotStats();
+
   // 즐겨찾기 스타일 추가
   addGlobalFavoriteStyles();
 });
@@ -700,8 +700,8 @@ function initUserManagement() {
           </select>
         </div>
         <div class="form-group mb-4">
-          <label for="popup-editGroup" class="form-label">그룹</label>
-          <input id="popup-editGroup" type="text" class="form-input" placeholder="그룹 입력" required value="${userData.group || ''}">
+          <label class="form-label">그룹</label>
+          <div id="popup-editGroups" class="flex flex-wrap gap-2"></div>
         </div>
         <div class="form-group mb-4">
           <label for="popup-editPassword" class="form-label">새 비밀번호 (변경 시에만 입력)</label>
@@ -712,7 +712,16 @@ function initUserManagement() {
     `;
     
     showPopup("유저 수정", content);
-    
+
+    // 그룹 체크박스 생성
+    const groupsContainer = document.getElementById("popup-editGroups");
+    if (groupsContainer) {
+      groupsContainer.innerHTML = chatbotGroups.map(g => {
+        const checked = (userData.groups && userData.groups.includes(g.id.toString())) || (userData.group && userData.group === g.name);
+        return `<label class="inline-flex items-center"><input type="checkbox" value="${g.id}" class="form-checkbox" ${checked ? 'checked' : ''}><span class="ml-1">${g.name}</span></label>`;
+      }).join(" ");
+    }
+
     document.getElementById("popup-userEditForm").addEventListener("submit", function(e) {
       e.preventDefault();
       
@@ -721,7 +730,9 @@ function initUserManagement() {
         displayName: document.getElementById("popup-editName").value.trim(),
         // 이메일은 readonly로 수정 불가
         role: document.getElementById("popup-editRole").value,
-        group: document.getElementById("popup-editGroup").value.trim(),
+        groups: Array.from(document.querySelectorAll('#popup-editGroups input[type="checkbox"]'))
+          .filter(cb => cb.checked)
+          .map(cb => cb.value),
         updatedAt: new Date().toISOString()
       };
       
@@ -832,7 +843,7 @@ function drawUserListForPopup() {
         
         const tdGroup = document.createElement("td");
         tdGroup.className = "px-4 py-2 border";
-        tdGroup.textContent = user.group || "";
+        tdGroup.textContent = user.groups ? user.groups.join(', ') : (user.group || "");
         
         const tdEdit = document.createElement("td");
         tdEdit.className = "px-4 py-2 border text-center";
@@ -868,6 +879,74 @@ function drawUserListForPopup() {
       `;
       showToast("유저 목록 로딩 실패: " + error.message, true);
     });
+}
+
+/****************************************
+ 3-1) 챗봇 클릭 통계
+*****************************************/
+function initBotStats() {
+  const btn = document.getElementById("botStatsBtn");
+  if (btn) {
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.addEventListener("click", showBotClickStats);
+  } else {
+    console.error("botStatsBtn 요소를 찾을 수 없습니다");
+  }
+}
+
+function showBotClickStats() {
+  const content = `
+    <div class="mb-4">
+      <label class="form-label">시작 날짜</label>
+      <input type="date" id="stats-start" class="form-input mb-2">
+      <label class="form-label">종료 날짜</label>
+      <input type="date" id="stats-end" class="form-input mb-2">
+      <button id="load-bot-stats" class="btn-primary w-full">조회</button>
+    </div>
+    <div class="user-list mt-4">
+      <table class="min-w-full border">
+        <thead class="bg-gray-100 dark:bg-gray-700">
+          <tr>
+            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">챗봇</th>
+            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">클릭 수</th>
+          </tr>
+        </thead>
+        <tbody id="bot-stats-body"></tbody>
+      </table>
+    </div>`;
+
+  showPopup("챗봇 클릭 통계", content);
+
+  document.getElementById("load-bot-stats").addEventListener("click", function() {
+    const start = document.getElementById("stats-start").value;
+    const end = document.getElementById("stats-end").value;
+    if (!start || !end) return;
+
+    firebase.database().ref("botUsageLogs").once("value").then(snapshot => {
+      const counts = {};
+      snapshot.forEach(child => {
+        const log = child.val();
+        if (log.timestamp && log.botName) {
+          const date = log.timestamp.slice(0,10);
+          if (date >= start && date <= end) {
+            counts[log.botName] = (counts[log.botName] || 0) + 1;
+          }
+        }
+      });
+
+      const tbody = document.getElementById("bot-stats-body");
+      tbody.innerHTML = "";
+      Object.entries(counts).forEach(([name, count]) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td class="px-4 py-2 border">${name}</td><td class="px-4 py-2 border text-center">${count}</td>`;
+        tbody.appendChild(tr);
+      });
+      if (Object.keys(counts).length === 0) {
+        tbody.innerHTML = `<tr><td colspan="2" class="px-4 py-4 border text-center">데이터가 없습니다.</td></tr>`;
+      }
+    });
+  });
 }
 
 /****************************************
@@ -939,15 +1018,23 @@ auth.onAuthStateChanged(user => {
         }
       })
       .then(userData => {
-        // 사용자 권한 저장 및 UI 업데이트
+        const allowedRoles = ["본사", "관리자", "슈퍼관리자"];
+        if (!allowedRoles.includes(userData.role)) {
+          showLoginError("본사, 관리자 또는 슈퍼관리자 권한만 로그인할 수 있습니다.");
+          auth.signOut();
+          localStorage.removeItem('isLoggedIn');
+          DOM.loginBtn.disabled = false;
+          DOM.loginBtn.innerHTML = "로그인";
+          return;
+        }
+
+        // 로그인 허용: 상태 저장 및 UI 업데이트
+        localStorage.setItem('isLoggedIn', 'true');
         userRole = userData.role;
-        
+
         // UI 업데이트: 로그인 화면 숨기고 앱 컨테이너 표시
         DOM.loginContainer.style.display = "none";
         DOM.appContainer.style.display = "flex";
-        
-        // 여기에 DOM 요소 참조 확인 및 이벤트 리스너 재설정 추가
-        setTimeout(ensureDOMElements, 500);
         
         // 사용자 정보 표시
         DOM.userNameEl.textContent = userData.displayName || userData.email;
@@ -1015,8 +1102,6 @@ auth.onAuthStateChanged(user => {
     
     // UI 업데이트: 앱 컨테이너 숨기고 로그인 화면 표시
     DOM.appContainer.style.display = "none";
-    DOM.gptChatContainer.style.display = "none";
-    DOM.chatHistoryContainer.style.display = "none";
     DOM.loginContainer.style.display = "flex";
   }
 });
@@ -1081,15 +1166,7 @@ function handleLogin() {
   // 영구 로그인 설정 후 로그인 시도
   auth.setPersistence(persistence)
     .then(() => {
-      return auth.signInWithEmailAndPassword(emailVal, pwVal)
-        .then(() => {
-          // 로그인 성공 시 localStorage에 상태 저장
-          localStorage.setItem('isLoggedIn', 'true');
-          
-          // 페이지 새로고침 대신 UI 직접 전환 (옵션)
-          DOM.loginContainer.style.display = "none";
-          DOM.appContainer.style.display = "flex";
-        });
+      return auth.signInWithEmailAndPassword(emailVal, pwVal);
     })
     .catch(err => {
       console.error("로그인 실패:", err);
@@ -1107,10 +1184,10 @@ function handleLogin() {
         errorMessage = "너무 많은 로그인 시도로 계정이 일시적으로 잠겼습니다. 잠시 후 다시 시도해주세요.";
       else if (err.code === "auth/network-request-failed")
         errorMessage = "네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요.";
-      
+
       showLoginError(errorMessage);
       localStorage.removeItem('isLoggedIn'); // 로그인 실패 시 상태 제거
-      
+
       // 버튼 상태 복원
       DOM.loginBtn.disabled = false;
       DOM.loginBtn.innerHTML = "로그인";
@@ -2063,30 +2140,37 @@ function renderContentForGroup(group) {
     
     // 활성 세션에 따라 챗봇 필터링
     if (group.chatbots && group.chatbots.length > 0) {
-      const filteredBots = activeSession === "all" 
-        ? group.chatbots 
-        : group.chatbots.filter(bot => bot.session === activeSession);
-      
-      if (filteredBots.length > 0) {
-        renderChatbotSection(contentArea, filteredBots, group);
+      if (activeSession === "all") {
+        const sessions = groupSessions[group.id] || [];
+        sessions.filter(s => s.id !== "all").forEach(sess => {
+          const botsInSession = group.chatbots.filter(bot => bot.session === sess.id);
+          if (botsInSession.length > 0) {
+            renderChatbotSection(contentArea, botsInSession, group, sess.id);
+          }
+        });
       } else {
-        // 선택된 세션에 챗봇이 없는 경우
-        contentArea.innerHTML = `
-          <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
-            <div class="mb-4">
-              <i class="fas fa-tag text-4xl text-gray-400 dark:text-gray-500"></i>
+        const filteredBots = group.chatbots.filter(bot => bot.session === activeSession);
+        if (filteredBots.length > 0) {
+          renderChatbotSection(contentArea, filteredBots, group, activeSession);
+        } else {
+          // 선택된 세션에 챗봇이 없는 경우
+          contentArea.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
+              <div class="mb-4">
+                <i class="fas fa-tag text-4xl text-gray-400 dark:text-gray-500"></i>
+              </div>
+              <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                "${DOM.currentSessionName.textContent}" 세션에 챗봇이 없습니다
+              </h3>
+              <p class="text-gray-500 dark:text-gray-400">이 세션에 등록된 챗봇이 없습니다. 새 챗봇을 추가하세요.</p>
+              ${checkPermission("관리자", false) ? `
+                <button onclick="addChatbot()" class="mt-4 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                  <i class="fas fa-plus mr-2"></i> 챗봇 추가
+                </button>
+              ` : ''}
             </div>
-            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              "${DOM.currentSessionName.textContent}" 세션에 챗봇이 없습니다
-            </h3>
-            <p class="text-gray-500 dark:text-gray-400">이 세션에 등록된 챗봇이 없습니다. 새 챗봇을 추가하세요.</p>
-            ${checkPermission("관리자", false) ? `
-              <button onclick="addChatbot()" class="mt-4 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                <i class="fas fa-plus mr-2"></i> 챗봇 추가
-              </button>
-            ` : ''}
-          </div>
-        `;
+          `;
+        }
       }
     } else {
       // 챗봇이 없는 경우
@@ -2109,18 +2193,18 @@ function renderContentForGroup(group) {
 }
 
 // 챗봇 섹션 렌더링
-function renderChatbotSection(container, chatbots, group) {
+function renderChatbotSection(container, chatbots, group, sessionId = activeSession) {
   // 세션 제목 설정
   let headerTitle = "";
   let headerIcon = "";
   
-  if (activeSession === "all") {
+  if (sessionId === "all") {
     headerTitle = "전체 챗봇";
     headerIcon = "fa-robot";
   } else {
-    const session = groupSessions[group.id]?.find(s => s.id === activeSession);
+    const session = groupSessions[group.id]?.find(s => s.id === sessionId);
     headerTitle = session ? session.title : "커스텀 챗봇";
-    headerIcon = sessionInfo[activeSession]?.icon || "fa-tag";
+    headerIcon = sessionInfo[sessionId]?.icon || "fa-tag";
   }
   
   // 섹션 컨테이너 생성
@@ -2182,11 +2266,12 @@ function renderChatbotCards(bots, showGroup = false) {
               <i class="${icon} text-blue-500 dark:text-blue-400 text-xl"></i>
             </div>
             <h3 class="text-lg font-medium text-gray-900 dark:text-white text-center mb-1">${bot.name}</h3>
-            <div class="flex justify-center mb-3">
+            <div class="flex justify-center mb-1">
               <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
                 ${sessionName}
               </span>
             </div>
+            <p class="text-xs text-gray-500 dark:text-gray-400 text-center mb-3">개발자: ${bot.developer || '-'}</p>
             <div class="flex justify-center">
               ${deleteMode ? 
                 `<div class="flex items-center justify-center mt-2">
@@ -2320,7 +2405,11 @@ function saveFavorites() {
 function openChatbot(url, botId, botName) {
   // 챗봇 사용 로깅
   logBotUsage(botId, botName, 'custom');
-  
+
+  // 클릭 수 집계
+  const dateKey = new Date().toISOString().slice(0,10);
+  db.ref(`botClicks/${botId}/${dateKey}`).transaction(current => (current || 0) + 1);
+
   // 챗봇 URL 열기
   window.open(url, '_blank');
 }
@@ -2626,6 +2715,9 @@ function addChatbot() {
   // 챗봇 URL 입력 요청
   const botUrl = prompt("챗봇 URL을 입력하세요:");
   if (!botUrl) return;
+
+  // 개발자 이름 입력 요청
+  const developer = prompt("개발자 이름을 입력하세요:") || "";
   
   // 세션 선택: 현재 그룹의 세션 목록
   const availableSessions = groupSessions[selectedGroupId] || defaultSessions;
@@ -2663,6 +2755,7 @@ function addChatbot() {
     id: Date.now(),
     name: botName,
     url: botUrl,
+    developer: developer,
     custom: true,
     session: sessionId,
     createdBy: currentUid,
@@ -2751,6 +2844,9 @@ function editChatbot() {
   
   const newUrl = prompt("새로운 챗봇 URL을 입력하세요:", botToEdit.url);
   if (!newUrl) return;
+
+  const newDeveloper = prompt("새로운 개발자 이름을 입력하세요:", botToEdit.developer || "");
+  if (newDeveloper === null) return;
   
   // 세션 변경 여부 확인
   const changeSession = confirm("세션을 변경하시겠습니까?");
@@ -2789,6 +2885,7 @@ function editChatbot() {
     group.chatbots[botIndex].name = newName;
     group.chatbots[botIndex].url = newUrl;
     group.chatbots[botIndex].session = newSession;
+    group.chatbots[botIndex].developer = newDeveloper;
     group.chatbots[botIndex].updatedAt = new Date().toISOString();
     group.chatbots[botIndex].updatedBy = currentUid;
   }
@@ -3122,11 +3219,11 @@ function downloadExcelTemplate() {
   const sessionsSheet = XLSX.utils.aoa_to_sheet(sessionsData);
   XLSX.utils.book_append_sheet(wb, sessionsSheet, "세션");
   
-  // 챗봇 시트 생성 (그룹명, 세션명, 챗봇명, URL, 챗봇 설명)
+  // 챗봇 시트 생성 (그룹명, 세션명, 챗봇명, URL, 챗봇 설명, 개발자)
   const chatbotsData = [
-    ["그룹명", "세션명", "챗봇명", "URL", "챗봇 설명"],
+    ["그룹명", "세션명", "챗봇명", "URL", "챗봇 설명", "개발자"],
     // 예제 데이터
-    ["그룹 예시", "세션 예시", "챗봇 예시", "https://example.com", "예시 챗봇 설명"]
+    ["그룹 예시", "세션 예시", "챗봇 예시", "https://example.com", "예시 챗봇 설명", "홍길동"]
   ];
   const chatbotsSheet = XLSX.utils.aoa_to_sheet(chatbotsData);
   XLSX.utils.book_append_sheet(wb, chatbotsSheet, "챗봇");
@@ -3323,6 +3420,7 @@ function processExcelData(uploadOption, groupsData, sessionsData, chatbotsData) 
           name: botName,
           url: botUrl,
           description: botRow["챗봇 설명"] ? botRow["챗봇 설명"].toString().trim() : "",
+          developer: botRow["개발자"] ? botRow["개발자"].toString().trim() : "",
           session: sessionId,
           custom: true,
           createdAt: new Date().toISOString(),
@@ -3460,8 +3558,8 @@ function exportToExcel() {
   const sessionsSheet = XLSX.utils.aoa_to_sheet(sessionsData);
   XLSX.utils.book_append_sheet(wb, sessionsSheet, "세션");
   
-  // 챗봇 데이터 시트 생성 (그룹명, 세션명, 챗봇명, URL, 챗봇 설명)
-  const chatbotsData = [["그룹명", "세션명", "챗봇명", "URL", "챗봇 설명"]];
+  // 챗봇 데이터 시트 생성 (그룹명, 세션명, 챗봇명, URL, 챗봇 설명, 개발자)
+  const chatbotsData = [["그룹명", "세션명", "챗봇명", "URL", "챗봇 설명", "개발자"]];
   chatbotGroups.forEach(group => {
     if (group.chatbots && group.chatbots.length > 0) {
       group.chatbots.forEach(bot => {
@@ -3476,7 +3574,8 @@ function exportToExcel() {
           sessionTitle,
           bot.name,
           bot.url,
-          bot.description || ""
+          bot.description || "",
+          bot.developer || ""
         ]);
       });
     }
@@ -3510,8 +3609,8 @@ function downloadUserExcel() {
         users.push({
           "이름": user.displayName || '',
           "이메일": user.email || '',
-          "권한": user.role || '',
-          "그룹": user.group || ''
+            "권한": user.role || '',
+            "그룹": user.groups ? user.groups.join(', ') : (user.group || '')
         });
       });
       const wb = XLSX.utils.book_new();
@@ -3572,8 +3671,9 @@ document.addEventListener("DOMContentLoaded", function() {
   // 즐겨찾기 스타일 추가
   addGlobalFavoriteStyles();
   
-  // 유저 관리 초기화
+  // 유저 관리 및 통계 초기화
   initUserManagement();
+  initBotStats();
 
     // 초기 로그인 상태 확인
   checkInitialLoginState();
@@ -3603,94 +3703,10 @@ function addGlobalFavoriteStyles() {
     .favorite-toggle.active .fa-star {
       color: #f59e0b !important;
     }
-    
+
     .favorite-toggle:not(.active) .fa-star {
       color: #94a3b8 !important;
     }
   `;
   document.head.appendChild(styleElement);
 }
-
-// DOM 요소 참조 확인 및 재시도 함수
-function ensureDOMElements() {
-  // 핵심 채팅 관련 DOM 요소 참조 갱신
-  DOM.newChatBtn = document.getElementById("new-chat-btn");
-  DOM.chatHistoryBtn = document.getElementById("chat-history-btn");
-  DOM.gptChatContainer = document.getElementById("gpt-chat-container");
-  DOM.chatHistoryContainer = document.getElementById("chat-history-container");
-  DOM.chatMessages = document.getElementById("chat-messages");
-  DOM.historyList = document.getElementById("history-list");
-  DOM.chatInputBox = document.getElementById("chat-input-box");
-  DOM.sendMessageBtn = document.getElementById("send-message-btn");
-  DOM.fileUploadBtn = document.getElementById("file-upload-btn");
-  DOM.fileUploadInput = document.getElementById("file-upload-input");
-  DOM.filePreviewArea = document.getElementById("file-preview-area");
-  DOM.backToHomeBtn = document.getElementById("back-to-home");
-  DOM.backFromHistoryBtn = document.getElementById("back-from-history");
-  DOM.chatTitle = document.getElementById("chat-title");
-  
-  // 참조가 제대로 설정되었는지 로그로 확인
-  console.log("DOM 요소 참조 확인:", {
-    newChatBtn: Boolean(DOM.newChatBtn),
-    chatHistoryBtn: Boolean(DOM.chatHistoryBtn),
-    gptChatContainer: Boolean(DOM.gptChatContainer),
-    chatHistoryContainer: Boolean(DOM.chatHistoryContainer)
-  });
-  
-  // 새 채팅 버튼과 채팅 히스토리 버튼에 이벤트 리스너 다시 등록
-  if (DOM.newChatBtn) {
-    // 기존 이벤트 리스너 제거 (중복 방지)
-    const newChatBtnClone = DOM.newChatBtn.cloneNode(true);
-    DOM.newChatBtn.parentNode.replaceChild(newChatBtnClone, DOM.newChatBtn);
-    DOM.newChatBtn = newChatBtnClone;
-    
-    // 새 이벤트 리스너 등록
-    DOM.newChatBtn.addEventListener("click", function(e) {
-      e.preventDefault();
-      console.log("새 채팅 버튼 클릭됨 (재등록)");
-      window.startNewChat(); // 전역 객체에서 함수 참조
-    });
-  }
-  
-  if (DOM.chatHistoryBtn) {
-    // 기존 이벤트 리스너 제거 (중복 방지)
-    const chatHistoryBtnClone = DOM.chatHistoryBtn.cloneNode(true);
-    DOM.chatHistoryBtn.parentNode.replaceChild(chatHistoryBtnClone, DOM.chatHistoryBtn);
-    DOM.chatHistoryBtn = chatHistoryBtnClone;
-    
-    // 새 이벤트 리스너 등록
-    DOM.chatHistoryBtn.addEventListener("click", function(e) {
-      e.preventDefault();
-      console.log("채팅 히스토리 버튼 클릭됨 (재등록)");
-      window.showChatHistory(); // 전역 객체를 통해 접근
-    });
-  }
-}
-
-// 직접 DOM 요소 클릭 강제 함수 (디버깅 및 문제 해결용)
-function forceClickNewChat() {
-  const btn = document.getElementById("new-chat-btn");
-  if (btn) {
-    console.log("새 채팅 버튼 강제 클릭");
-    btn.click();
-  } else {
-    console.error("새 채팅 버튼을 찾을 수 없음");
-  }
-}
-
-function forceClickChatHistory() {
-  const btn = document.getElementById("chat-history-btn");
-  if (btn) {
-    console.log("채팅 히스토리 버튼 강제 클릭");
-    btn.click();
-  } else {
-    console.error("채팅 히스토리 버튼을 찾을 수 없음");
-  }
-}
-
-// window 객체에 디버깅 함수 추가
-window.debugChat = {
-  forceClickNewChat,
-  forceClickChatHistory,
-  ensureDOMElements
-};
