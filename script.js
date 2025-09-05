@@ -910,6 +910,25 @@ function drawUserListForPopup() {
           return `<label class="inline-flex items-center mr-2"><input type="checkbox" value="${g.id}" class="form-checkbox" ${checked ? 'checked' : ''}><span class="ml-1">${g.name}</span></label>`;
         }).join(' ');
 
+        const groupBtnWrap = document.createElement('div');
+        groupBtnWrap.className = 'mt-1';
+        groupBtnWrap.innerHTML = `
+          <button type="button" class="text-blue-500 hover:underline text-xs mr-2 select-all-groups">전체 선택</button>
+          <button type="button" class="text-blue-500 hover:underline text-xs deselect-all-groups">전체 해제</button>
+        `;
+        tdGroup.appendChild(groupBtnWrap);
+
+        const selectAllBtn = groupBtnWrap.querySelector('.select-all-groups');
+        const deselectAllBtn = groupBtnWrap.querySelector('.deselect-all-groups');
+        selectAllBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          tdGroup.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+        });
+        deselectAllBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          tdGroup.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        });
+
         // 삭제
         const tdDelete = document.createElement('td');
         tdDelete.className = 'px-4 py-2 border text-center';
