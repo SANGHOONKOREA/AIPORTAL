@@ -1389,12 +1389,28 @@ function checkInitialLoginState() {
 }
 
 
+// 로그인 알림 표시 (성공/오류 공통)
+function showLoginInfo(message) {
+  const alertEl = DOM.loginAlert;
+  alertEl.textContent = message;
+  alertEl.classList.remove("alert-danger");
+  alertEl.classList.add("alert-success");
+  alertEl.style.display = "block";
+
+  // 5초 후 알림 숨김
+  setTimeout(() => {
+    alertEl.style.display = "none";
+  }, 5000);
+}
+
 // 로그인 오류 표시
 function showLoginError(message) {
   const alertEl = DOM.loginAlert;
   alertEl.textContent = message;
+  alertEl.classList.remove("alert-success");
+  alertEl.classList.add("alert-danger");
   alertEl.style.display = "block";
-  
+
   // 5초 후 알림 숨김
   setTimeout(() => {
     alertEl.style.display = "none";
@@ -1436,28 +1452,37 @@ function logout() {
 // 비밀번호 재설정 함수
 function resetPassword() {
   const emailVal = DOM.loginEmail.value.trim();
-  
+
   // 이메일 유효성 검사
   if (!emailVal) {
     showLoginError("비밀번호 변경을 위해 이메일을 입력하세요.");
     return;
   }
-  
-  // 비밀번호 재설정 메일 전송
-  auth.sendPasswordResetEmail(emailVal)
-    .then(() => {
-      showToast("비밀번호 재설정 이메일이 발송되었습니다. 이메일을 확인하세요.");
+
+  // Realtime DB에서 계정 존재 여부 확인 후 비밀번호 재설정 메일 전송
+  db.ref('users').orderByChild('email').equalTo(emailVal).once('value')
+    .then(snapshot => {
+      if (!snapshot.exists()) {
+        showLoginError("등록된 계정이 아닙니다.");
+        return;
+      }
+
+      return auth.sendPasswordResetEmail(emailVal)
+        .then(() => {
+          showLoginInfo("비밀번호 재설정 이메일이 발송되었습니다. 이메일을 확인하세요.");
+        })
+        .catch(err => {
+          let errorMessage = "비밀번호 변경 이메일 발송 실패";
+
+          if (err.code === "auth/invalid-email")
+            errorMessage = "유효하지 않은 이메일 형식입니다.";
+
+          showLoginError(errorMessage);
+        });
     })
     .catch(err => {
-      // 오류 메시지 사용자 친화적으로 표시
-      let errorMessage = "비밀번호 변경 이메일 발송 실패";
-      
-      if (err.code === "auth/invalid-email")
-        errorMessage = "유효하지 않은 이메일 형식입니다.";
-      else if (err.code === "auth/user-not-found")
-        errorMessage = "등록되지 않은 이메일입니다.";
-      
-      showLoginError(errorMessage);
+      console.error("계정 확인 실패:", err);
+      showLoginError("계정 확인 중 오류가 발생했습니다.");
     });
 }
 
