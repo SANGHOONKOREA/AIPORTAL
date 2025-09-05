@@ -12,7 +12,8 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 const storage = firebase.storage();
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);  
+const userPermissionsRef = db.ref('userPermissions');
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
 /****************************************
  1) 전역 변수 설정
@@ -773,7 +774,7 @@ function initUserManagement() {
       // Firebase DB 업데이트
       passwordUpdatePromise
         .then(() => {
-          return firebase.database().ref("users/" + userId).update(updatedUser);
+          return userPermissionsRef.child(userId).update(updatedUser);
         })
         .then(function() {
           showToast("유저 수정이 완료되었습니다.");
@@ -820,13 +821,16 @@ function drawUserListForPopup() {
     </tr>
   `;
 
-  // Firebase에서 유저 데이터 가져오기
-  firebase.database().ref("users").once("value")
-    .then(function(snapshot) {
+  // Firebase에서 유저 데이터 가져오기 (기본 정보 + 포털 전용 권한)
+  Promise.all([
+    db.ref('users').once('value'),
+    userPermissionsRef.once('value')
+  ])
+    .then(([usersSnap, permsSnap]) => {
       // 로딩 메시지 제거
       tbody.innerHTML = "";
 
-      if (!snapshot.exists() || snapshot.numChildren() === 0) {
+      if (!usersSnap.exists() || usersSnap.numChildren() === 0) {
         tbody.innerHTML = `
           <tr>
             <td colspan="6" class="px-4 py-4 border text-center">
@@ -837,14 +841,19 @@ function drawUserListForPopup() {
         return;
       }
 
-      snapshot.forEach(function(childSnapshot) {
+      const perms = permsSnap.val() || {};
+
+      usersSnap.forEach(childSnapshot => {
         const user = childSnapshot.val();
         const userKey = childSnapshot.key; // Firebase에서 유저의 uid
 
-        // 역할이 '협력사'인 경우 표시하지 않음
-        if (user.role === '협력사') return;
+        // 기본 DB 역할이 '협력' 또는 '협력사'인 경우 표시하지 않음
+        if (['협력', '협력사'].includes(user.role)) return;
 
-        const tr = document.createElement("tr");
+        const portal = perms[userKey] || {};
+        if (portal.hidden) return; // 포털에서 숨긴 사용자
+
+        const tr = document.createElement('tr');
         tr.setAttribute('data-user-id', userKey);
 
         // ID (수정 가능)
@@ -853,27 +862,27 @@ function drawUserListForPopup() {
         const idInput = document.createElement('input');
         idInput.type = 'text';
         idInput.className = 'form-input user-id-input';
-        idInput.value = user.id || '';
+        idInput.value = portal.id ?? user.id ?? '';
         tdId.appendChild(idInput);
 
         // 이름 (수정 가능)
-        const tdName = document.createElement("td");
-        tdName.className = "px-4 py-2 border";
+        const tdName = document.createElement('td');
+        tdName.className = 'px-4 py-2 border';
         tdName.style.minWidth = '150px';
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
         nameInput.className = 'form-input user-name-input';
-        nameInput.value = user.displayName || '';
+        nameInput.value = portal.displayName ?? user.displayName ?? '';
         tdName.appendChild(nameInput);
 
         // 이메일
-        const tdEmail = document.createElement("td");
-        tdEmail.className = "px-4 py-2 border";
-        tdEmail.textContent = user.email || "";
+        const tdEmail = document.createElement('td');
+        tdEmail.className = 'px-4 py-2 border';
+        tdEmail.textContent = user.email || '';
 
-        // 권한
-        const tdRole = document.createElement("td");
-        tdRole.className = "px-4 py-2 border";
+        // 권한 (포털 전용)
+        const tdRole = document.createElement('td');
+        tdRole.className = 'px-4 py-2 border';
         tdRole.style.minWidth = '90px';
         const roleSelect = document.createElement('select');
         roleSelect.className = 'form-input role-select';
@@ -885,17 +894,18 @@ function drawUserListForPopup() {
           opt.textContent = r;
           roleSelect.appendChild(opt);
         });
-        roleSelect.value = roles.includes(user.role) ? user.role : '본사';
+        roleSelect.value = roles.includes(portal.role) ? portal.role : '본사';
         ['mousedown','click','touchstart'].forEach(evt => {
           roleSelect.addEventListener(evt, e => e.stopPropagation());
         });
         tdRole.appendChild(roleSelect);
 
-        // 그룹
-        const tdGroup = document.createElement("td");
-        tdGroup.className = "px-4 py-2 border";
+        // 그룹 (포털 전용)
+        const tdGroup = document.createElement('td');
+        tdGroup.className = 'px-4 py-2 border';
+        const portalGroups = portal.groups || [];
         tdGroup.innerHTML = chatbotGroups.map(g => {
-          const checked = (user.groups && user.groups.includes(g.id.toString())) || (user.group && user.group === g.name);
+          const checked = portalGroups.includes(g.id.toString());
           return `<label class="inline-flex items-center mr-2"><input type="checkbox" value="${g.id}" class="form-checkbox" ${checked ? 'checked' : ''}><span class="ml-1">${g.name}</span></label>`;
         }).join(' ');
 
@@ -957,7 +967,7 @@ function saveAllUserChanges() {
       .map(cb => cb.value);
 
     updatePromises.push(
-      firebase.database().ref('users/' + userId).update({
+      userPermissionsRef.child(userId).set({
         id: updatedId,
         displayName: updatedName,
         role: role,
@@ -980,7 +990,7 @@ function saveAllUserChanges() {
 function deleteUser(userId) {
   if (!confirm('정말 삭제하시겠습니까?')) return;
 
-  firebase.database().ref('users/' + userId).remove()
+  userPermissionsRef.child(userId).update({ hidden: true })
     .then(() => {
       const row = document.querySelector(`tr[data-user-id="${userId}"]`);
       if (row) row.remove();
@@ -1128,9 +1138,15 @@ auth.onAuthStateChanged(user => {
           return snap.val();
         }
       })
-      .then(userData => {
+      .then(baseData => {
+        return userPermissionsRef.child(user.uid).once('value').then(permsSnap => {
+          const permData = permsSnap.val() || {};
+          return { baseData, mergedData: { ...baseData, ...permData } };
+        });
+      })
+      .then(({ baseData, mergedData }) => {
         const allowedRoles = ["본사", "관리자", "슈퍼관리자"];
-        if (!allowedRoles.includes(userData.role)) {
+        if (["협력", "협력사"].includes(baseData.role) || !allowedRoles.includes(mergedData.role)) {
           showLoginError("본사, 관리자 또는 슈퍼관리자 권한만 로그인할 수 있습니다.");
           auth.signOut();
           localStorage.removeItem('isLoggedIn');
@@ -1141,64 +1157,66 @@ auth.onAuthStateChanged(user => {
 
         // 로그인 허용: 상태 저장 및 UI 업데이트
         localStorage.setItem('isLoggedIn', 'true');
-        userRole = userData.role;
+        userRole = mergedData.role;
 
         // UI 업데이트: 로그인 화면 숨기고 앱 컨테이너 표시
         DOM.loginContainer.style.display = "none";
         DOM.appContainer.style.display = "flex";
-        
-        // 사용자 정보 표시
-        DOM.userNameEl.textContent = userData.displayName || userData.email;
-        DOM.userRoleEl.textContent = userData.role;
-        
+
+        // 사용자 정보 표시 (포털 데이터 우선)
+        DOM.userNameEl.textContent = mergedData.displayName || mergedData.email;
+        DOM.userRoleEl.textContent = mergedData.role;
+
         // 관리자 버튼 표시 여부 설정
         DOM.adminBtn.style.display =
-          userData.role === "관리자" || userData.role === "슈퍼관리자" ? "inline-block" : "none";
-        
+          mergedData.role === "관리자" || mergedData.role === "슈퍼관리자" ? "inline-block" : "none";
+
         // AI 모델 설정 로드
         loadUserAiConfig();
-        
+
         // 즐겨찾기 목록 로드
         loadFavorites();
-        
+
         // 모든 데이터 로드를 Promise.all로 병렬 실행
         Promise.all([
           loadChatbotGroups(),
           loadChatbotsData(),
           loadGroupSessions()
-        ]).then(() => {
-          // 추가 데이터 로드 및 초기 화면 설정
-          loadSubgroups();
-          
-          // 기본 그룹이 없는 경우 생성
-          if (!chatbotGroups.length) {
-            chatbotGroups.push({ 
-              id: Date.now(), 
-              name: "기본 그룹", 
-              type: "custom", 
-              chatbots: [],
-              createdAt: new Date().toISOString(),
-              createdBy: currentUid
-            });
-          }
-          
-          // 첫 번째 그룹 선택
-          selectGroup(chatbotGroups[0].id);
-          
-          // 로그인 성공 메시지 표시
-          showToast(`환영합니다, ${userData.displayName || userData.email}님!`);
-          
-          // 로그인 활동 로깅
-          logUserActivity("login");
-          
-          // 유저 관리 초기화 추가 (권한에 따라)
-          if (userData.role === "관리자" || userData.role === "슈퍼관리자") {
-            initUserManagement();
-          }
-        }).catch(err => {
-          console.error("데이터 로드 오류:", err);
-          showToast("데이터 로드에 문제가 발생했습니다.", true);
-        });
+        ])
+          .then(() => {
+            // 추가 데이터 로드 및 초기 화면 설정
+            loadSubgroups();
+
+            // 기본 그룹이 없는 경우 생성
+            if (!chatbotGroups.length) {
+              chatbotGroups.push({
+                id: Date.now(),
+                name: "기본 그룹",
+                type: "custom",
+                chatbots: [],
+                createdAt: new Date().toISOString(),
+                createdBy: currentUid
+              });
+            }
+
+            // 첫 번째 그룹 선택
+            selectGroup(chatbotGroups[0].id);
+
+            // 로그인 성공 메시지 표시
+            showToast(`환영합니다, ${mergedData.displayName || mergedData.email}님!`);
+
+            // 로그인 활동 로깅
+            logUserActivity("login");
+
+            // 유저 관리 초기화 추가 (권한에 따라)
+            if (mergedData.role === "관리자" || mergedData.role === "슈퍼관리자") {
+              initUserManagement();
+            }
+          })
+          .catch(err => {
+            console.error("데이터 로드 오류:", err);
+            showToast("데이터 로드에 문제가 발생했습니다.", true);
+          });
       })
       .catch(err => {
         console.error("사용자 정보 로드 실패:", err);
@@ -3712,16 +3730,27 @@ function exportToExcel() {
 }
 
 function downloadUserExcel() {
-  firebase.database().ref("users").once("value")
-    .then(function(snapshot) {
+  Promise.all([
+    db.ref('users').once('value'),
+    userPermissionsRef.once('value')
+  ])
+    .then(([usersSnap, permsSnap]) => {
+      const perms = permsSnap.val() || {};
       const users = [];
-      snapshot.forEach(function(childSnapshot) {
-        const user = childSnapshot.val();
+      usersSnap.forEach(childSnapshot => {
+        const base = childSnapshot.val();
+        const uid = childSnapshot.key;
+
+        if (["협력", "협력사"].includes(base.role)) return;
+        const portal = perms[uid] || {};
+        if (portal.hidden) return;
+
         users.push({
-          "이름": user.displayName || '',
-          "이메일": user.email || '',
-            "권한": user.role || '',
-            "그룹": user.groups ? user.groups.join(', ') : (user.group || '')
+          "ID": portal.id ?? base.id ?? '',
+          "이름": portal.displayName ?? base.displayName ?? '',
+          "이메일": base.email || '',
+          "권한": portal.role || '본사',
+          "그룹": portal.groups ? portal.groups.join(', ') : ''
         });
       });
       const wb = XLSX.utils.book_new();
