@@ -1389,12 +1389,28 @@ function checkInitialLoginState() {
 }
 
 
+// 로그인 알림 표시 (성공/오류 공통)
+function showLoginInfo(message) {
+  const alertEl = DOM.loginAlert;
+  alertEl.textContent = message;
+  alertEl.classList.remove("alert-danger");
+  alertEl.classList.add("alert-success");
+  alertEl.style.display = "block";
+
+  // 5초 후 알림 숨김
+  setTimeout(() => {
+    alertEl.style.display = "none";
+  }, 5000);
+}
+
 // 로그인 오류 표시
 function showLoginError(message) {
   const alertEl = DOM.loginAlert;
   alertEl.textContent = message;
+  alertEl.classList.remove("alert-success");
+  alertEl.classList.add("alert-danger");
   alertEl.style.display = "block";
-  
+
   // 5초 후 알림 숨김
   setTimeout(() => {
     alertEl.style.display = "none";
@@ -1446,7 +1462,7 @@ function resetPassword() {
   // 비밀번호 재설정 메일 전송
   auth.sendPasswordResetEmail(emailVal)
     .then(() => {
-      showToast("비밀번호 재설정 이메일이 발송되었습니다. 이메일을 확인하세요.");
+      showLoginInfo("비밀번호 재설정 이메일이 발송되었습니다. 이메일을 확인하세요.");
     })
     .catch(err => {
       // 오류 메시지 사용자 친화적으로 표시
