@@ -847,16 +847,24 @@ function drawUserListForPopup() {
         const tr = document.createElement("tr");
         tr.setAttribute('data-user-id', userKey);
 
-        // ID
+        // ID (수정 가능)
         const tdId = document.createElement('td');
         tdId.className = 'px-4 py-2 border';
-        tdId.textContent = user.id || '';
+        const idInput = document.createElement('input');
+        idInput.type = 'text';
+        idInput.className = 'form-input user-id-input';
+        idInput.value = user.id || '';
+        tdId.appendChild(idInput);
 
-        // 이름
+        // 이름 (수정 가능)
         const tdName = document.createElement("td");
         tdName.className = "px-4 py-2 border";
         tdName.style.minWidth = '150px';
-        tdName.textContent = user.displayName || "";
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'form-input user-name-input';
+        nameInput.value = user.displayName || '';
+        tdName.appendChild(nameInput);
 
         // 이메일
         const tdEmail = document.createElement("td");
@@ -867,7 +875,7 @@ function drawUserListForPopup() {
         const tdRole = document.createElement("td");
         tdRole.className = "px-4 py-2 border";
         const roleSelect = document.createElement('select');
-        roleSelect.className = 'form-input';
+        roleSelect.className = 'form-input role-select';
         const roles = ['본사', '관리자', '슈퍼관리자'];
         roles.forEach(r => {
           const opt = document.createElement('option');
@@ -931,7 +939,12 @@ function saveAllUserChanges() {
     const userId = tr.getAttribute('data-user-id');
     if (!userId) return;
 
-    const roleSelect = tr.querySelector('select');
+    const idInput = tr.querySelector('input.user-id-input');
+    const nameInput = tr.querySelector('input.user-name-input');
+    const roleSelect = tr.querySelector('select.role-select');
+
+    const updatedId = idInput ? idInput.value.trim() : '';
+    const updatedName = nameInput ? nameInput.value.trim() : '';
     const role = roleSelect ? roleSelect.value : '';
 
     const groups = Array.from(tr.querySelectorAll('input[type="checkbox"]'))
@@ -940,6 +953,8 @@ function saveAllUserChanges() {
 
     updatePromises.push(
       firebase.database().ref('users/' + userId).update({
+        id: updatedId,
+        displayName: updatedName,
         role: role,
         groups: groups
       })
