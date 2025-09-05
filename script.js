@@ -660,10 +660,11 @@ function initUserManagement() {
             <thead class="bg-gray-100 dark:bg-gray-700">
               <tr>
                 <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">ID</th>
-                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이름</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200" style="min-width:150px;">이름</th>
                 <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이메일</th>
                 <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">권한</th>
                 <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">그룹</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">삭제</th>
               </tr>
             </thead>
             <tbody id="popup-userListTableBody">
@@ -677,7 +678,7 @@ function initUserManagement() {
       </div>
     `;
 
-    showPopup("유저 목록", content, { maxWidth: 'max-w-4xl' });
+    showPopup("유저 목록", content, { maxWidth: 'max-w-5xl' });
 
     // 팝업에 유저 목록 로드
     drawUserListForPopup();
@@ -810,7 +811,7 @@ function drawUserListForPopup() {
   // 로딩 상태 표시
   tbody.innerHTML = `
     <tr>
-      <td colspan="5" class="px-4 py-4 border text-center">
+      <td colspan="6" class="px-4 py-4 border text-center">
         <div class="flex items-center justify-center">
           <div class="w-6 h-6 border-2 border-gray-200 dark:border-gray-700 border-t-blue-500 rounded-full inline-block animate-spin mr-2"></div>
           <span>사용자 목록을 불러오는 중...</span>
@@ -828,7 +829,7 @@ function drawUserListForPopup() {
       if (!snapshot.exists() || snapshot.numChildren() === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="5" class="px-4 py-4 border text-center">
+            <td colspan="6" class="px-4 py-4 border text-center">
               등록된 사용자가 없습니다.
             </td>
           </tr>
@@ -838,22 +839,23 @@ function drawUserListForPopup() {
 
       snapshot.forEach(function(childSnapshot) {
         const user = childSnapshot.val();
-        const userId = childSnapshot.key; // Firebase에서 유저의 key를 id로 사용
+        const userKey = childSnapshot.key; // Firebase에서 유저의 uid
 
         // 역할이 '협력사'인 경우 표시하지 않음
         if (user.role === '협력사') return;
 
         const tr = document.createElement("tr");
-        tr.setAttribute('data-user-id', userId);
+        tr.setAttribute('data-user-id', userKey);
 
         // ID
         const tdId = document.createElement('td');
         tdId.className = 'px-4 py-2 border';
-        tdId.textContent = userId;
+        tdId.textContent = user.id || '';
 
         // 이름
         const tdName = document.createElement("td");
         tdName.className = "px-4 py-2 border";
+        tdName.style.minWidth = '150px';
         tdName.textContent = user.displayName || "";
 
         // 이메일
@@ -884,12 +886,22 @@ function drawUserListForPopup() {
           return `<label class="inline-flex items-center mr-2"><input type="checkbox" value="${g.id}" class="form-checkbox" ${checked ? 'checked' : ''}><span class="ml-1">${g.name}</span></label>`;
         }).join(' ');
 
+        // 삭제
+        const tdDelete = document.createElement('td');
+        tdDelete.className = 'px-4 py-2 border text-center';
+        const delBtn = document.createElement('button');
+        delBtn.className = 'text-red-500 hover:underline';
+        delBtn.textContent = '삭제';
+        delBtn.addEventListener('click', () => deleteUser(userKey));
+        tdDelete.appendChild(delBtn);
+
         // 행에 컬럼 추가
         tr.appendChild(tdId);
         tr.appendChild(tdName);
         tr.appendChild(tdEmail);
         tr.appendChild(tdRole);
         tr.appendChild(tdGroup);
+        tr.appendChild(tdDelete);
 
         // 테이블에 행 추가
         tbody.appendChild(tr);
@@ -899,7 +911,7 @@ function drawUserListForPopup() {
       console.error("유저 목록 로딩 실패:", error);
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" class="px-4 py-2 border text-center text-red-500">
+          <td colspan="6" class="px-4 py-2 border text-center text-red-500">
             <i class="fas fa-exclamation-triangle mr-2"></i>
             유저 목록을 불러오는 데 실패했습니다.
           </td>
@@ -941,6 +953,22 @@ function saveAllUserChanges() {
     .catch(error => {
       console.error('유저 정보 저장 실패:', error);
       showToast('유저 정보 저장 실패: ' + error.message, true);
+    });
+}
+
+// 유저 삭제
+function deleteUser(userId) {
+  if (!confirm('정말 삭제하시겠습니까?')) return;
+
+  firebase.database().ref('users/' + userId).remove()
+    .then(() => {
+      const row = document.querySelector(`tr[data-user-id="${userId}"]`);
+      if (row) row.remove();
+      showToast('유저가 삭제되었습니다.');
+    })
+    .catch(error => {
+      console.error('유저 삭제 실패:', error);
+      showToast('유저 삭제 실패: ' + error.message, true);
     });
 }
 
