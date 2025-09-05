@@ -466,7 +466,7 @@ body {
 /* Toast */
 .toast {
   position: fixed;
-  bottom: 2rem;
+  top: 2rem;
   right: 2rem;
   padding: 1rem 1.5rem;
   background-color: #fff;
@@ -477,7 +477,7 @@ body {
   display: flex;
   align-items: center;
   transition: transform 0.3s ease, opacity 0.3s ease;
-  transform: translateY(1rem);
+  transform: translateY(-1rem);
   opacity: 0;
   pointer-events: none;
 }
