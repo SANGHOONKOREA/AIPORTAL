@@ -978,6 +978,8 @@ function saveAllUserChanges() {
 
   Promise.all(updatePromises)
     .then(() => {
+      const popup = document.getElementById('user-management-popup');
+      if (popup) document.body.removeChild(popup);
       showToast('유저 정보가 저장되었습니다.');
     })
     .catch(error => {
