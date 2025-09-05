@@ -1459,25 +1459,30 @@ function resetPassword() {
     return;
   }
 
-  // 계정 존재 여부 확인 후 비밀번호 재설정 메일 전송
-  auth.fetchSignInMethodsForEmail(emailVal)
-    .then(methods => {
-      if (methods.length === 0) {
+  // Realtime DB에서 계정 존재 여부 확인 후 비밀번호 재설정 메일 전송
+  db.ref('users').orderByChild('email').equalTo(emailVal).once('value')
+    .then(snapshot => {
+      if (!snapshot.exists()) {
         showLoginError("등록된 계정이 아닙니다.");
         return;
       }
 
-      return auth.sendPasswordResetEmail(emailVal).then(() => {
-        showLoginInfo("비밀번호 재설정 이메일이 발송되었습니다. 이메일을 확인하세요.");
-      });
+      return auth.sendPasswordResetEmail(emailVal)
+        .then(() => {
+          showLoginInfo("비밀번호 재설정 이메일이 발송되었습니다. 이메일을 확인하세요.");
+        })
+        .catch(err => {
+          let errorMessage = "비밀번호 변경 이메일 발송 실패";
+
+          if (err.code === "auth/invalid-email")
+            errorMessage = "유효하지 않은 이메일 형식입니다.";
+
+          showLoginError(errorMessage);
+        });
     })
     .catch(err => {
-      let errorMessage = "비밀번호 변경 이메일 발송 실패";
-
-      if (err.code === "auth/invalid-email")
-        errorMessage = "유효하지 않은 이메일 형식입니다.";
-
-      showLoginError(errorMessage);
+      console.error("계정 확인 실패:", err);
+      showLoginError("계정 확인 중 오류가 발생했습니다.");
     });
 }
 
