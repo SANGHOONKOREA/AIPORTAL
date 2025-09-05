@@ -881,9 +881,15 @@ function drawUserListForPopup() {
           const opt = document.createElement('option');
           opt.value = r;
           opt.textContent = r;
+          if (user.role === r) opt.selected = true;
           roleSelect.appendChild(opt);
         });
-        roleSelect.value = roles.includes(user.role) ? user.role : '본사';
+        if (!roles.includes(user.role)) {
+          roleSelect.value = '본사';
+        }
+        ['mousedown','click','change','touchstart'].forEach(evt => {
+          roleSelect.addEventListener(evt, e => e.stopPropagation());
+        });
         tdRole.appendChild(roleSelect);
 
         // 그룹

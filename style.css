@@ -180,6 +180,9 @@ body {
   background-color: #fff;
   color: #0f172a;
 }
+.role-select {
+  cursor: pointer;
+}
 .dark .form-input {
   background-color: #1e293b;
   border-color: #475569;
