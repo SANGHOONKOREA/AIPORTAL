@@ -55,6 +55,7 @@ const defaultSessions = [{ id: "all", title: "전체" }];
 
 // 그룹별 세션 데이터 저장
 let groupSessions = {}; // { groupId: [sessions], ... }
+let allowedGroupIds = [];
 
 // DOM 엘리먼트들의 참조 저장
 const DOM = {
@@ -1160,6 +1161,9 @@ auth.onAuthStateChanged(user => {
         // 로그인 허용: 상태 저장 및 UI 업데이트
         localStorage.setItem('isLoggedIn', 'true');
         userRole = mergedData.role;
+        allowedGroupIds = Array.isArray(mergedData.groups)
+          ? mergedData.groups.map(String)
+          : [];
 
         // UI 업데이트: 로그인 화면 숨기고 앱 컨테이너 표시
         DOM.loginContainer.style.display = "none";
@@ -1395,6 +1399,7 @@ function logout() {
       currentUser = null;
       currentUid = null;
       userRole = "사용자";
+      allowedGroupIds = [];
       
       // 입력 필드 초기화
       DOM.loginEmail.value = "";
@@ -1542,6 +1547,10 @@ function loadChatbotGroups() {
     });
 }
 
+function getAccessibleGroups() {
+  return chatbotGroups.filter(g => allowedGroupIds.includes(g.id.toString()));
+}
+
 /****************************************
  10) 사이드바 렌더링
 *****************************************/
@@ -1556,14 +1565,15 @@ function renderSidebar() {
   
   // 사이드바가 축소되었는지 확인
   const isCollapsed = DOM.sidebar.classList.contains("sidebar-collapsed");
-  
+  const accessibleGroups = getAccessibleGroups();
+
   // 즐겨찾기 목록 렌더링
   if (favorites.length > 0) {
     favorites.forEach(favorite => {
       const groupId = favorite.groupId;
       const botId = favorite.botId;
-      const group = chatbotGroups.find(g => g.id == groupId);
-      
+      const group = accessibleGroups.find(g => g.id == groupId);
+
       if (group && group.chatbots) {
         const bot = group.chatbots.find(b => b.id == botId);
         if (bot) {
@@ -1625,7 +1635,7 @@ function renderSidebar() {
   sidebarList.appendChild(allItem);
   
   // 각 그룹에 대해 아이템 생성
-  chatbotGroups.forEach(group => {
+  accessibleGroups.forEach(group => {
     const li = document.createElement("a");
     li.href = "#";
     li.className = `sidebar-nav-item ${group.id === selectedGroupId ? "active" : ""}`;
@@ -1716,58 +1726,55 @@ function renderSessionDropdown(groupId) {
     const allItem = document.createElement("a");
     allItem.href = "#";
     allItem.className = `session-dropdown-item ${activeSession === "all" ? "active" : ""}`;
-    allItem.innerHTML = `<i class="fas fa-bars mr-2"></i>전체`;
+    allItem.innerHTML = `<i class=\"fas fa-bars mr-2\"></i>전체`;
     allItem.onclick = (e) => {
       e.preventDefault();
       switchSession("all", "전체");
     };
     sessionDropdownMenu.appendChild(allItem);
-    
+
     // 각 그룹의 세션 추가
-    chatbotGroups.forEach(group => {
-      // 각 그룹에 등록된 세션 목록 (없으면 기본 세션 사용)
+    const accessibleGroups = getAccessibleGroups();
+    accessibleGroups.forEach(group => {
       const sessions = groupSessions[group.id] || defaultSessions;
-      // "전체" 외의 세션만 표시
       const customSessions = sessions.filter(s => s.id !== "all");
-      
+
       if (customSessions.length > 0) {
         customSessions.forEach(session => {
           const item = document.createElement("a");
           item.href = "#";
-          
-          // 그룹 이름과 세션명을 결합해서 표시 (예: "고객지원 - 세션 예시")
+
           const displayText = group.name + " - " + session.title;
-          
+
           item.className = "session-dropdown-item";
           const icon = sessionInfo[session.id]?.icon || "fa-tag";
-          item.innerHTML = `<i class="fas ${icon} mr-2"></i>${displayText}`;
-          
+          item.innerHTML = `<i class=\"fas ${icon} mr-2\"></i>${displayText}`;
+
           item.onclick = (e) => {
             e.preventDefault();
-            // 세션 전환 시, 수정된 표시 텍스트(displayText)를 함께 전달
             switchSession(session.id, displayText);
           };
-          
+
           sessionDropdownMenu.appendChild(item);
         });
       }
     });
   } else {
-    // "전체" 외의 그룹은 기존 방식대로 처리
+    if (!allowedGroupIds.includes(groupId.toString())) return;
     const sessions = groupSessions[groupId] || defaultSessions;
-    
+
     sessions.forEach(session => {
       const item = document.createElement("a");
       item.href = "#";
       item.className = `session-dropdown-item ${session.id === activeSession ? "active" : ""}`;
       const icon = sessionInfo[session.id]?.icon || "fa-tag";
-      item.innerHTML = `<i class="fas ${icon} mr-2"></i>${session.title}`;
-      
+      item.innerHTML = `<i class=\"fas ${icon} mr-2\"></i>${session.title}`;
+
       item.onclick = (e) => {
         e.preventDefault();
         switchSession(session.id, session.title);
       };
-      
+
       sessionDropdownMenu.appendChild(item);
     });
   }
@@ -2104,7 +2111,12 @@ function selectGroup(groupId) {
     selectAllGroups();
     return;
   }
-  
+
+  if (!allowedGroupIds.includes(groupId.toString())) {
+    showToast("해당 그룹에 대한 권한이 없습니다.", true);
+    return;
+  }
+
   // 선택된 그룹 ID 저장
   selectedGroupId = groupId;
   
@@ -2165,8 +2177,10 @@ function renderAllGroupsContent() {
     // 콘텐츠 렌더링 완료 후 즐겨찾기 상태 업데이트
     setTimeout(updateFavoriteStarsVisually, 100);
 
+    const accessibleGroups = getAccessibleGroups();
+
     // 챗봇이 없는 경우
-    if (!chatbotGroups.length) {
+    if (!accessibleGroups.length) {
       contentArea.innerHTML = `
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
           <div class="mb-4">
@@ -2186,12 +2200,12 @@ function renderAllGroupsContent() {
     
     // 모든 그룹의 챗봇 수집
     let allChatbots = [];
-    
-    chatbotGroups.forEach(group => {
+
+    accessibleGroups.forEach(group => {
       if (group.chatbots && group.chatbots.length > 0) {
         // 활성 세션에 따라 필터링
-        const filtered = activeSession === "all" 
-          ? group.chatbots 
+        const filtered = activeSession === "all"
+          ? group.chatbots
           : group.chatbots.filter(bot => bot.session === activeSession);
         
         // 그룹 정보 추가
@@ -2254,6 +2268,11 @@ function renderAllGroupsContent() {
 function renderContentForGroup(group) {
   // DOM 요소 가져오기
   const contentArea = DOM.contentArea;
+
+  if (!allowedGroupIds.includes(group.id.toString())) {
+    showToast("해당 그룹에 대한 권한이 없습니다.", true);
+    return;
+  }
   
   // 로딩 상태 표시
   contentArea.innerHTML = `
@@ -3670,8 +3689,9 @@ function exportToExcel() {
   const wb = XLSX.utils.book_new();
   
   // 그룹 데이터 시트 생성 (그룹명만)
+  const accessibleGroups = getAccessibleGroups();
   const groupsData = [["그룹명"]];
-  chatbotGroups.forEach(group => {
+  accessibleGroups.forEach(group => {
     groupsData.push([group.name]);
   });
   const groupsSheet = XLSX.utils.aoa_to_sheet(groupsData);
@@ -3679,11 +3699,10 @@ function exportToExcel() {
   
   // 세션 데이터 시트 생성 (그룹명, 세션명)
   const sessionsData = [["그룹명", "세션명"]];
-  Object.entries(groupSessions).forEach(([groupId, sessions]) => {
-    const group = chatbotGroups.find(g => g.id == groupId);
-    const groupName = group ? group.name : "";
+  accessibleGroups.forEach(group => {
+    const sessions = groupSessions[group.id] || [];
     sessions.forEach(session => {
-      sessionsData.push([groupName, session.title]);
+      sessionsData.push([group.name, session.title]);
     });
   });
   const sessionsSheet = XLSX.utils.aoa_to_sheet(sessionsData);
@@ -3691,7 +3710,7 @@ function exportToExcel() {
   
   // 챗봇 데이터 시트 생성 (그룹명, 세션명, 챗봇명, URL, 챗봇 설명, 개발자)
   const chatbotsData = [["그룹명", "세션명", "챗봇명", "URL", "챗봇 설명", "개발자"]];
-  chatbotGroups.forEach(group => {
+  accessibleGroups.forEach(group => {
     if (group.chatbots && group.chatbots.length > 0) {
       group.chatbots.forEach(bot => {
         let sessionTitle = "전체";
@@ -3720,7 +3739,7 @@ function exportToExcel() {
   
   // 활동 로깅
   logUserActivity("export_excel_data", {
-    groupsCount: chatbotGroups.length,
+    groupsCount: accessibleGroups.length,
     chatbotsCount: chatbotsData.length - 1
   });
   
