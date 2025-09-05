@@ -15,6 +15,10 @@
   --text-light: #e2e8f0;
 }
 
+html {
+  font-size: 75%;
+}
+
 body {
   margin: 0 !important;
   font-family: 'Noto Sans KR', sans-serif;
