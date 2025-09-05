@@ -874,20 +874,19 @@ function drawUserListForPopup() {
         // 권한
         const tdRole = document.createElement("td");
         tdRole.className = "px-4 py-2 border";
+        tdRole.style.minWidth = '90px';
         const roleSelect = document.createElement('select');
         roleSelect.className = 'form-input role-select';
+        roleSelect.style.minWidth = '90px';
         const roles = ['본사', '관리자', '슈퍼관리자'];
         roles.forEach(r => {
           const opt = document.createElement('option');
           opt.value = r;
           opt.textContent = r;
-          if (user.role === r) opt.selected = true;
           roleSelect.appendChild(opt);
         });
-        if (!roles.includes(user.role)) {
-          roleSelect.value = '본사';
-        }
-        ['mousedown','click','change','touchstart'].forEach(evt => {
+        roleSelect.value = roles.includes(user.role) ? user.role : '본사';
+        ['mousedown','click','touchstart'].forEach(evt => {
           roleSelect.addEventListener(evt, e => e.stopPropagation());
         });
         tdRole.appendChild(roleSelect);

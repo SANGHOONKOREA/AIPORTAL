@@ -182,6 +182,7 @@ body {
 }
 .role-select {
   cursor: pointer;
+  min-width: 90px;
 }
 .dark .form-input {
   background-color: #1e293b;
