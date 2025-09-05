@@ -12,7 +12,8 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
 const storage = firebase.storage();
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);  
+const userPermissionsRef = db.ref('userPermissions');
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
 /****************************************
  1) 전역 변수 설정
@@ -54,6 +55,7 @@ const defaultSessions = [{ id: "all", title: "전체" }];
 
 // 그룹별 세션 데이터 저장
 let groupSessions = {}; // { groupId: [sessions], ... }
+let allowedGroupIds = [];
 
 // DOM 엘리먼트들의 참조 저장
 const DOM = {
@@ -607,20 +609,22 @@ function initUserManagement() {
   }
   
   // 팝업창 관련 함수들 정의
-  window.showPopup = function(title, content) {
+  window.showPopup = function(title, content, options = {}) {
+    const maxWidth = options.maxWidth || 'max-w-xl';
+
     // 기존 팝업이 있으면 제거
     const existingPopup = document.getElementById("user-management-popup");
     if (existingPopup) {
       document.body.removeChild(existingPopup);
     }
-    
+
     // 새 팝업 생성
     const popup = document.createElement("div");
     popup.id = "user-management-popup";
     popup.className = "fixed inset-0 flex items-center justify-center z-50";
     popup.innerHTML = `
       <div class="fixed inset-0 bg-black opacity-50"></div>
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-xl w-full relative z-10">
+      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 ${maxWidth} w-full relative z-10">
         <div class="flex justify-between items-center mb-4">
           <h3 class="text-lg font-medium text-gray-900 dark:text-white">${title}</h3>
           <button id="close-popup" class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300">
@@ -653,27 +657,39 @@ function initUserManagement() {
   window.showUserList = function() {
     const content = `
       <div class="user-list">
-        <table class="min-w-full border">
-          <thead class="bg-gray-100 dark:bg-gray-700">
-            <tr>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이름</th>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이메일</th>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">권한</th>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">그룹</th>
-              <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">관리</th>
-            </tr>
-          </thead>
-          <tbody id="popup-userListTableBody">
-            <!-- drawUserListForPopup() 함수에서 동적으로 채워집니다. -->
-          </tbody>
-        </table>
+        <div class="overflow-x-auto">
+          <table class="min-w-full border text-sm">
+            <thead class="bg-gray-100 dark:bg-gray-700">
+              <tr>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">ID</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200" style="min-width:150px;">이름</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이메일</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">권한</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">그룹</th>
+                <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">삭제</th>
+              </tr>
+            </thead>
+            <tbody id="popup-userListTableBody">
+              <!-- drawUserListForPopup() 함수에서 동적으로 채워집니다. -->
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-4 text-right">
+          <button id="saveAllUsersBtn" class="btn-primary px-4 py-2">전체 저장</button>
+        </div>
       </div>
     `;
-    
-    showPopup("유저 목록", content);
-    
+
+    showPopup("유저 목록", content, { maxWidth: 'max-w-5xl' });
+
     // 팝업에 유저 목록 로드
     drawUserListForPopup();
+
+    // 저장 버튼 이벤트
+    const saveBtn = document.getElementById('saveAllUsersBtn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', saveAllUserChanges);
+    }
   };
 
   // 유저 등록 폼 보여주기 함수
@@ -694,7 +710,7 @@ function initUserManagement() {
           <label for="popup-editRole" class="form-label">권한</label>
           <select id="popup-editRole" class="form-input" required>
             <option value="">선택하세요</option>
-            <option value="사용자" ${userData.role === "사용자" ? "selected" : ""}>사용자</option>
+            <option value="본사" ${userData.role === "본사" ? "selected" : ""}>본사</option>
             <option value="관리자" ${userData.role === "관리자" ? "selected" : ""}>관리자</option>
             <option value="슈퍼관리자" ${userData.role === "슈퍼관리자" ? "selected" : ""}>슈퍼관리자</option>
           </select>
@@ -759,7 +775,7 @@ function initUserManagement() {
       // Firebase DB 업데이트
       passwordUpdatePromise
         .then(() => {
-          return firebase.database().ref("users/" + userId).update(updatedUser);
+          return userPermissionsRef.child(userId).update(updatedUser);
         })
         .then(function() {
           showToast("유저 수정이 완료되었습니다.");
@@ -790,14 +806,14 @@ function drawUserListForPopup() {
     console.error("popup-userListTableBody 요소를 찾을 수 없습니다.");
     return;
   }
-  
+
   // 테이블 내용 비우기
   tbody.innerHTML = "";
-  
+
   // 로딩 상태 표시
   tbody.innerHTML = `
     <tr>
-      <td colspan="5" class="px-4 py-4 border text-center">
+      <td colspan="6" class="px-4 py-4 border text-center">
         <div class="flex items-center justify-center">
           <div class="w-6 h-6 border-2 border-gray-200 dark:border-gray-700 border-t-blue-500 rounded-full inline-block animate-spin mr-2"></div>
           <span>사용자 목록을 불러오는 중...</span>
@@ -805,64 +821,131 @@ function drawUserListForPopup() {
       </td>
     </tr>
   `;
-  
-  // Firebase에서 유저 데이터 가져오기
-  firebase.database().ref("users").once("value")
-    .then(function(snapshot) {
+
+  // Firebase에서 유저 데이터 가져오기 (기본 정보 + 포털 전용 권한)
+  Promise.all([
+    db.ref('users').once('value'),
+    userPermissionsRef.once('value')
+  ])
+    .then(([usersSnap, permsSnap]) => {
       // 로딩 메시지 제거
       tbody.innerHTML = "";
-      
-      if (!snapshot.exists() || snapshot.numChildren() === 0) {
+
+      if (!usersSnap.exists() || usersSnap.numChildren() === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="5" class="px-4 py-4 border text-center">
+            <td colspan="6" class="px-4 py-4 border text-center">
               등록된 사용자가 없습니다.
             </td>
           </tr>
         `;
         return;
       }
-      
-      snapshot.forEach(function(childSnapshot) {
+
+      const perms = permsSnap.val() || {};
+
+      usersSnap.forEach(childSnapshot => {
         const user = childSnapshot.val();
-        const userId = childSnapshot.key; // Firebase에서 유저의 key를 id로 사용
-        const tr = document.createElement("tr");
-        
-        // 각 컬럼 생성
-        const tdName = document.createElement("td");
-        tdName.className = "px-4 py-2 border";
-        tdName.textContent = user.displayName || "";
-        
-        const tdEmail = document.createElement("td");
-        tdEmail.className = "px-4 py-2 border";
-        tdEmail.textContent = user.email || "";
-        
-        const tdRole = document.createElement("td");
-        tdRole.className = "px-4 py-2 border";
-        tdRole.textContent = user.role || "";
-        
-        const tdGroup = document.createElement("td");
-        tdGroup.className = "px-4 py-2 border";
-        tdGroup.textContent = user.groups ? user.groups.join(', ') : (user.group || "");
-        
-        const tdEdit = document.createElement("td");
-        tdEdit.className = "px-4 py-2 border text-center";
-        // 수정 버튼 생성
-        const editBtn = document.createElement("button");
-        editBtn.className = "btn-primary px-3 py-1 text-sm";
-        editBtn.textContent = "수정";
-        editBtn.addEventListener("click", function() {
-          showUserEdit(userId, user);
+        const userKey = childSnapshot.key; // Firebase에서 유저의 uid
+
+        // 기본 DB 역할이 '협력' 또는 '협력사'인 경우 표시하지 않음
+        if (['협력', '협력사'].includes(user.role)) return;
+
+        const portal = perms[userKey] || {};
+        if (portal.hidden) return; // 포털에서 숨긴 사용자
+
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-user-id', userKey);
+
+        // ID (수정 가능)
+        const tdId = document.createElement('td');
+        tdId.className = 'px-4 py-2 border';
+        const idInput = document.createElement('input');
+        idInput.type = 'text';
+        idInput.className = 'form-input user-id-input';
+        idInput.value = portal.id ?? user.id ?? '';
+        tdId.appendChild(idInput);
+
+        // 이름 (수정 가능)
+        const tdName = document.createElement('td');
+        tdName.className = 'px-4 py-2 border';
+        tdName.style.minWidth = '150px';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'form-input user-name-input';
+        nameInput.value = portal.displayName ?? user.displayName ?? '';
+        tdName.appendChild(nameInput);
+
+        // 이메일
+        const tdEmail = document.createElement('td');
+        tdEmail.className = 'px-4 py-2 border';
+        tdEmail.textContent = user.email || '';
+
+        // 권한 (포털 전용)
+        const tdRole = document.createElement('td');
+        tdRole.className = 'px-4 py-2 border';
+        tdRole.style.minWidth = '90px';
+        const roleSelect = document.createElement('select');
+        roleSelect.className = 'form-input role-select';
+        roleSelect.style.minWidth = '90px';
+        const roles = ['본사', '관리자', '슈퍼관리자'];
+        roles.forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r;
+          opt.textContent = r;
+          roleSelect.appendChild(opt);
         });
-        tdEdit.appendChild(editBtn);
-        
+        roleSelect.value = roles.includes(portal.role) ? portal.role : '본사';
+        ['mousedown','click','touchstart'].forEach(evt => {
+          roleSelect.addEventListener(evt, e => e.stopPropagation());
+        });
+        tdRole.appendChild(roleSelect);
+
+        // 그룹 (포털 전용)
+        const tdGroup = document.createElement('td');
+        tdGroup.className = 'px-4 py-2 border';
+        const portalGroups = portal.groups || [];
+        tdGroup.innerHTML = chatbotGroups.map(g => {
+          const checked = portalGroups.includes(g.id.toString());
+          return `<label class="inline-flex items-center mr-2"><input type="checkbox" value="${g.id}" class="form-checkbox" ${checked ? 'checked' : ''}><span class="ml-1">${g.name}</span></label>`;
+        }).join(' ');
+
+        const groupBtnWrap = document.createElement('div');
+        groupBtnWrap.className = 'mt-1';
+        groupBtnWrap.innerHTML = `
+          <button type="button" class="text-blue-500 hover:underline text-xs mr-2 select-all-groups">전체 선택</button>
+          <button type="button" class="text-blue-500 hover:underline text-xs deselect-all-groups">전체 해제</button>
+        `;
+        tdGroup.appendChild(groupBtnWrap);
+
+        const selectAllBtn = groupBtnWrap.querySelector('.select-all-groups');
+        const deselectAllBtn = groupBtnWrap.querySelector('.deselect-all-groups');
+        selectAllBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          tdGroup.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+        });
+        deselectAllBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          tdGroup.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+        });
+
+        // 삭제
+        const tdDelete = document.createElement('td');
+        tdDelete.className = 'px-4 py-2 border text-center';
+        const delBtn = document.createElement('button');
+        delBtn.className = 'text-red-500 hover:underline';
+        delBtn.textContent = '삭제';
+        delBtn.addEventListener('click', () => deleteUser(userKey));
+        tdDelete.appendChild(delBtn);
+
         // 행에 컬럼 추가
+        tr.appendChild(tdId);
         tr.appendChild(tdName);
         tr.appendChild(tdEmail);
         tr.appendChild(tdRole);
         tr.appendChild(tdGroup);
-        tr.appendChild(tdEdit);
-        
+        tr.appendChild(tdDelete);
+
         // 테이블에 행 추가
         tbody.appendChild(tr);
       });
@@ -871,13 +954,73 @@ function drawUserListForPopup() {
       console.error("유저 목록 로딩 실패:", error);
       tbody.innerHTML = `
         <tr>
-          <td colspan="5" class="px-4 py-2 border text-center text-red-500">
+          <td colspan="6" class="px-4 py-2 border text-center text-red-500">
             <i class="fas fa-exclamation-triangle mr-2"></i>
             유저 목록을 불러오는 데 실패했습니다.
           </td>
         </tr>
       `;
       showToast("유저 목록 로딩 실패: " + error.message, true);
+    });
+}
+
+// 유저 목록 변경사항 저장
+function saveAllUserChanges() {
+  const tbody = document.getElementById('popup-userListTableBody');
+  if (!tbody) return;
+
+  const updatePromises = [];
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const userId = tr.getAttribute('data-user-id');
+    if (!userId) return;
+
+    const idInput = tr.querySelector('input.user-id-input');
+    const nameInput = tr.querySelector('input.user-name-input');
+    const roleSelect = tr.querySelector('select.role-select');
+
+    const updatedId = idInput ? idInput.value.trim() : '';
+    const updatedName = nameInput ? nameInput.value.trim() : '';
+    const role = roleSelect ? roleSelect.value : '';
+
+    const groups = Array.from(tr.querySelectorAll('input[type="checkbox"]'))
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+
+    updatePromises.push(
+      userPermissionsRef.child(userId).set({
+        id: updatedId,
+        displayName: updatedName,
+        role: role,
+        groups: groups
+      })
+    );
+  });
+
+  Promise.all(updatePromises)
+    .then(() => {
+      const popup = document.getElementById('user-management-popup');
+      if (popup) document.body.removeChild(popup);
+      showToast('유저 정보가 저장되었습니다.');
+    })
+    .catch(error => {
+      console.error('유저 정보 저장 실패:', error);
+      showToast('유저 정보 저장 실패: ' + error.message, true);
+    });
+}
+
+// 유저 삭제
+function deleteUser(userId) {
+  if (!confirm('정말 삭제하시겠습니까?')) return;
+
+  userPermissionsRef.child(userId).update({ hidden: true })
+    .then(() => {
+      const row = document.querySelector(`tr[data-user-id="${userId}"]`);
+      if (row) row.remove();
+      showToast('유저가 삭제되었습니다.');
+    })
+    .catch(error => {
+      console.error('유저 삭제 실패:', error);
+      showToast('유저 삭제 실패: ' + error.message, true);
     });
 }
 
@@ -1017,9 +1160,15 @@ auth.onAuthStateChanged(user => {
           return snap.val();
         }
       })
-      .then(userData => {
+      .then(baseData => {
+        return userPermissionsRef.child(user.uid).once('value').then(permsSnap => {
+          const permData = permsSnap.val() || {};
+          return { baseData, mergedData: { ...baseData, ...permData } };
+        });
+      })
+      .then(({ baseData, mergedData }) => {
         const allowedRoles = ["본사", "관리자", "슈퍼관리자"];
-        if (!allowedRoles.includes(userData.role)) {
+        if (["협력", "협력사"].includes(baseData.role) || !allowedRoles.includes(mergedData.role)) {
           showLoginError("본사, 관리자 또는 슈퍼관리자 권한만 로그인할 수 있습니다.");
           auth.signOut();
           localStorage.removeItem('isLoggedIn');
@@ -1030,64 +1179,69 @@ auth.onAuthStateChanged(user => {
 
         // 로그인 허용: 상태 저장 및 UI 업데이트
         localStorage.setItem('isLoggedIn', 'true');
-        userRole = userData.role;
+        userRole = mergedData.role;
+        allowedGroupIds = Array.isArray(mergedData.groups)
+          ? mergedData.groups.map(String)
+          : [];
 
         // UI 업데이트: 로그인 화면 숨기고 앱 컨테이너 표시
         DOM.loginContainer.style.display = "none";
         DOM.appContainer.style.display = "flex";
-        
-        // 사용자 정보 표시
-        DOM.userNameEl.textContent = userData.displayName || userData.email;
-        DOM.userRoleEl.textContent = userData.role;
-        
+
+        // 사용자 정보 표시 (포털 데이터 우선)
+        DOM.userNameEl.textContent = mergedData.displayName || mergedData.email;
+        DOM.userRoleEl.textContent = mergedData.role;
+
         // 관리자 버튼 표시 여부 설정
         DOM.adminBtn.style.display =
-          userData.role === "관리자" || userData.role === "슈퍼관리자" ? "inline-block" : "none";
-        
+          mergedData.role === "관리자" || mergedData.role === "슈퍼관리자" ? "inline-block" : "none";
+
         // AI 모델 설정 로드
         loadUserAiConfig();
-        
+
         // 즐겨찾기 목록 로드
         loadFavorites();
-        
+
         // 모든 데이터 로드를 Promise.all로 병렬 실행
         Promise.all([
           loadChatbotGroups(),
           loadChatbotsData(),
           loadGroupSessions()
-        ]).then(() => {
-          // 추가 데이터 로드 및 초기 화면 설정
-          loadSubgroups();
-          
-          // 기본 그룹이 없는 경우 생성
-          if (!chatbotGroups.length) {
-            chatbotGroups.push({ 
-              id: Date.now(), 
-              name: "기본 그룹", 
-              type: "custom", 
-              chatbots: [],
-              createdAt: new Date().toISOString(),
-              createdBy: currentUid
-            });
-          }
-          
-          // 첫 번째 그룹 선택
-          selectGroup(chatbotGroups[0].id);
-          
-          // 로그인 성공 메시지 표시
-          showToast(`환영합니다, ${userData.displayName || userData.email}님!`);
-          
-          // 로그인 활동 로깅
-          logUserActivity("login");
-          
-          // 유저 관리 초기화 추가 (권한에 따라)
-          if (userData.role === "관리자" || userData.role === "슈퍼관리자") {
-            initUserManagement();
-          }
-        }).catch(err => {
-          console.error("데이터 로드 오류:", err);
-          showToast("데이터 로드에 문제가 발생했습니다.", true);
-        });
+        ])
+          .then(() => {
+            // 추가 데이터 로드 및 초기 화면 설정
+            loadSubgroups();
+
+            // 기본 그룹이 없는 경우 생성
+            if (!chatbotGroups.length) {
+              chatbotGroups.push({
+                id: Date.now(),
+                name: "기본 그룹",
+                type: "custom",
+                chatbots: [],
+                createdAt: new Date().toISOString(),
+                createdBy: currentUid
+              });
+            }
+
+            // 첫 번째 그룹 선택
+            selectGroup(chatbotGroups[0].id);
+
+            // 로그인 성공 메시지 표시
+            showToast(`환영합니다, ${mergedData.displayName || mergedData.email}님!`);
+
+            // 로그인 활동 로깅
+            logUserActivity("login");
+
+            // 유저 관리 초기화 추가 (권한에 따라)
+            if (mergedData.role === "관리자" || mergedData.role === "슈퍼관리자") {
+              initUserManagement();
+            }
+          })
+          .catch(err => {
+            console.error("데이터 로드 오류:", err);
+            showToast("데이터 로드에 문제가 발생했습니다.", true);
+          });
       })
       .catch(err => {
         console.error("사용자 정보 로드 실패:", err);
@@ -1264,6 +1418,7 @@ function logout() {
       currentUser = null;
       currentUid = null;
       userRole = "사용자";
+      allowedGroupIds = [];
       
       // 입력 필드 초기화
       DOM.loginEmail.value = "";
@@ -1291,7 +1446,7 @@ function resetPassword() {
   // 비밀번호 재설정 메일 전송
   auth.sendPasswordResetEmail(emailVal)
     .then(() => {
-      showToast("비밀번호 재설정 이메일이 발송되었습니다. 이메일을 확인하세요.");
+      showToast("계정 이메일로 비밀번호 변경 링크가 전송되었습니다.");
     })
     .catch(err => {
       // 오류 메시지 사용자 친화적으로 표시
@@ -1411,6 +1566,10 @@ function loadChatbotGroups() {
     });
 }
 
+function getAccessibleGroups() {
+  return chatbotGroups.filter(g => allowedGroupIds.includes(g.id.toString()));
+}
+
 /****************************************
  10) 사이드바 렌더링
 *****************************************/
@@ -1425,14 +1584,15 @@ function renderSidebar() {
   
   // 사이드바가 축소되었는지 확인
   const isCollapsed = DOM.sidebar.classList.contains("sidebar-collapsed");
-  
+  const accessibleGroups = getAccessibleGroups();
+
   // 즐겨찾기 목록 렌더링
   if (favorites.length > 0) {
     favorites.forEach(favorite => {
       const groupId = favorite.groupId;
       const botId = favorite.botId;
-      const group = chatbotGroups.find(g => g.id == groupId);
-      
+      const group = accessibleGroups.find(g => g.id == groupId);
+
       if (group && group.chatbots) {
         const bot = group.chatbots.find(b => b.id == botId);
         if (bot) {
@@ -1494,7 +1654,7 @@ function renderSidebar() {
   sidebarList.appendChild(allItem);
   
   // 각 그룹에 대해 아이템 생성
-  chatbotGroups.forEach(group => {
+  accessibleGroups.forEach(group => {
     const li = document.createElement("a");
     li.href = "#";
     li.className = `sidebar-nav-item ${group.id === selectedGroupId ? "active" : ""}`;
@@ -1585,58 +1745,55 @@ function renderSessionDropdown(groupId) {
     const allItem = document.createElement("a");
     allItem.href = "#";
     allItem.className = `session-dropdown-item ${activeSession === "all" ? "active" : ""}`;
-    allItem.innerHTML = `<i class="fas fa-bars mr-2"></i>전체`;
+    allItem.innerHTML = `<i class=\"fas fa-bars mr-2\"></i>전체`;
     allItem.onclick = (e) => {
       e.preventDefault();
       switchSession("all", "전체");
     };
     sessionDropdownMenu.appendChild(allItem);
-    
+
     // 각 그룹의 세션 추가
-    chatbotGroups.forEach(group => {
-      // 각 그룹에 등록된 세션 목록 (없으면 기본 세션 사용)
+    const accessibleGroups = getAccessibleGroups();
+    accessibleGroups.forEach(group => {
       const sessions = groupSessions[group.id] || defaultSessions;
-      // "전체" 외의 세션만 표시
       const customSessions = sessions.filter(s => s.id !== "all");
-      
+
       if (customSessions.length > 0) {
         customSessions.forEach(session => {
           const item = document.createElement("a");
           item.href = "#";
-          
-          // 그룹 이름과 세션명을 결합해서 표시 (예: "고객지원 - 세션 예시")
+
           const displayText = group.name + " - " + session.title;
-          
+
           item.className = "session-dropdown-item";
           const icon = sessionInfo[session.id]?.icon || "fa-tag";
-          item.innerHTML = `<i class="fas ${icon} mr-2"></i>${displayText}`;
-          
+          item.innerHTML = `<i class=\"fas ${icon} mr-2\"></i>${displayText}`;
+
           item.onclick = (e) => {
             e.preventDefault();
-            // 세션 전환 시, 수정된 표시 텍스트(displayText)를 함께 전달
             switchSession(session.id, displayText);
           };
-          
+
           sessionDropdownMenu.appendChild(item);
         });
       }
     });
   } else {
-    // "전체" 외의 그룹은 기존 방식대로 처리
+    if (!allowedGroupIds.includes(groupId.toString())) return;
     const sessions = groupSessions[groupId] || defaultSessions;
-    
+
     sessions.forEach(session => {
       const item = document.createElement("a");
       item.href = "#";
       item.className = `session-dropdown-item ${session.id === activeSession ? "active" : ""}`;
       const icon = sessionInfo[session.id]?.icon || "fa-tag";
-      item.innerHTML = `<i class="fas ${icon} mr-2"></i>${session.title}`;
-      
+      item.innerHTML = `<i class=\"fas ${icon} mr-2\"></i>${session.title}`;
+
       item.onclick = (e) => {
         e.preventDefault();
         switchSession(session.id, session.title);
       };
-      
+
       sessionDropdownMenu.appendChild(item);
     });
   }
@@ -1973,7 +2130,12 @@ function selectGroup(groupId) {
     selectAllGroups();
     return;
   }
-  
+
+  if (!allowedGroupIds.includes(groupId.toString())) {
+    showToast("해당 그룹에 대한 권한이 없습니다.", true);
+    return;
+  }
+
   // 선택된 그룹 ID 저장
   selectedGroupId = groupId;
   
@@ -2034,8 +2196,10 @@ function renderAllGroupsContent() {
     // 콘텐츠 렌더링 완료 후 즐겨찾기 상태 업데이트
     setTimeout(updateFavoriteStarsVisually, 100);
 
+    const accessibleGroups = getAccessibleGroups();
+
     // 챗봇이 없는 경우
-    if (!chatbotGroups.length) {
+    if (!accessibleGroups.length) {
       contentArea.innerHTML = `
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
           <div class="mb-4">
@@ -2055,12 +2219,12 @@ function renderAllGroupsContent() {
     
     // 모든 그룹의 챗봇 수집
     let allChatbots = [];
-    
-    chatbotGroups.forEach(group => {
+
+    accessibleGroups.forEach(group => {
       if (group.chatbots && group.chatbots.length > 0) {
         // 활성 세션에 따라 필터링
-        const filtered = activeSession === "all" 
-          ? group.chatbots 
+        const filtered = activeSession === "all"
+          ? group.chatbots
           : group.chatbots.filter(bot => bot.session === activeSession);
         
         // 그룹 정보 추가
@@ -2123,6 +2287,11 @@ function renderAllGroupsContent() {
 function renderContentForGroup(group) {
   // DOM 요소 가져오기
   const contentArea = DOM.contentArea;
+
+  if (!allowedGroupIds.includes(group.id.toString())) {
+    showToast("해당 그룹에 대한 권한이 없습니다.", true);
+    return;
+  }
   
   // 로딩 상태 표시
   contentArea.innerHTML = `
@@ -3539,8 +3708,9 @@ function exportToExcel() {
   const wb = XLSX.utils.book_new();
   
   // 그룹 데이터 시트 생성 (그룹명만)
+  const accessibleGroups = getAccessibleGroups();
   const groupsData = [["그룹명"]];
-  chatbotGroups.forEach(group => {
+  accessibleGroups.forEach(group => {
     groupsData.push([group.name]);
   });
   const groupsSheet = XLSX.utils.aoa_to_sheet(groupsData);
@@ -3548,11 +3718,10 @@ function exportToExcel() {
   
   // 세션 데이터 시트 생성 (그룹명, 세션명)
   const sessionsData = [["그룹명", "세션명"]];
-  Object.entries(groupSessions).forEach(([groupId, sessions]) => {
-    const group = chatbotGroups.find(g => g.id == groupId);
-    const groupName = group ? group.name : "";
+  accessibleGroups.forEach(group => {
+    const sessions = groupSessions[group.id] || [];
     sessions.forEach(session => {
-      sessionsData.push([groupName, session.title]);
+      sessionsData.push([group.name, session.title]);
     });
   });
   const sessionsSheet = XLSX.utils.aoa_to_sheet(sessionsData);
@@ -3560,7 +3729,7 @@ function exportToExcel() {
   
   // 챗봇 데이터 시트 생성 (그룹명, 세션명, 챗봇명, URL, 챗봇 설명, 개발자)
   const chatbotsData = [["그룹명", "세션명", "챗봇명", "URL", "챗봇 설명", "개발자"]];
-  chatbotGroups.forEach(group => {
+  accessibleGroups.forEach(group => {
     if (group.chatbots && group.chatbots.length > 0) {
       group.chatbots.forEach(bot => {
         let sessionTitle = "전체";
@@ -3589,7 +3758,7 @@ function exportToExcel() {
   
   // 활동 로깅
   logUserActivity("export_excel_data", {
-    groupsCount: chatbotGroups.length,
+    groupsCount: accessibleGroups.length,
     chatbotsCount: chatbotsData.length - 1
   });
   
@@ -3601,16 +3770,27 @@ function exportToExcel() {
 }
 
 function downloadUserExcel() {
-  firebase.database().ref("users").once("value")
-    .then(function(snapshot) {
+  Promise.all([
+    db.ref('users').once('value'),
+    userPermissionsRef.once('value')
+  ])
+    .then(([usersSnap, permsSnap]) => {
+      const perms = permsSnap.val() || {};
       const users = [];
-      snapshot.forEach(function(childSnapshot) {
-        const user = childSnapshot.val();
+      usersSnap.forEach(childSnapshot => {
+        const base = childSnapshot.val();
+        const uid = childSnapshot.key;
+
+        if (["협력", "협력사"].includes(base.role)) return;
+        const portal = perms[uid] || {};
+        if (portal.hidden) return;
+
         users.push({
-          "이름": user.displayName || '',
-          "이메일": user.email || '',
-            "권한": user.role || '',
-            "그룹": user.groups ? user.groups.join(', ') : (user.group || '')
+          "ID": portal.id ?? base.id ?? '',
+          "이름": portal.displayName ?? base.displayName ?? '',
+          "이메일": base.email || '',
+          "권한": portal.role || '본사',
+          "그룹": portal.groups ? portal.groups.join(', ') : ''
         });
       });
       const wb = XLSX.utils.book_new();
