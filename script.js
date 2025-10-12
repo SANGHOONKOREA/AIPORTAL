@@ -1048,18 +1048,136 @@ function showBotClickStats() {
       <button id="load-bot-stats" class="btn-primary w-full">조회</button>
     </div>
     <div class="user-list mt-4">
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="text-lg font-semibold text-gray-800">챗봇별 사용 현황</h4>
+        <label class="text-sm text-gray-600">
+          정렬
+          <select id="stats-sort" class="form-input inline-block w-auto ml-2">
+            <option value="desc" selected>클릭 수 많은 순</option>
+            <option value="asc">클릭 수 적은 순</option>
+            <option value="name">이름순</option>
+          </select>
+        </label>
+      </div>
       <table class="min-w-full border">
         <thead class="bg-gray-100 dark:bg-gray-700">
           <tr>
+            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">순위</th>
             <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">챗봇</th>
-            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">클릭 수</th>
+            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">총 클릭 수</th>
+            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">고유 사용자 수</th>
+            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">상세</th>
           </tr>
         </thead>
         <tbody id="bot-stats-body"></tbody>
       </table>
+    </div>
+    <div id="bot-stats-detail" class="user-list mt-6" style="display:none;">
+      <div class="flex items-center justify-between mb-2">
+        <h4 id="bot-detail-title" class="text-lg font-semibold text-gray-800"></h4>
+        <span id="bot-detail-total" class="text-sm text-gray-600"></span>
+      </div>
+      <table class="min-w-full border">
+        <thead class="bg-gray-100 dark:bg-gray-700">
+          <tr>
+            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">사용자</th>
+            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">이메일</th>
+            <th class="px-4 py-2 border text-gray-800 dark:text-gray-200">클릭 수</th>
+          </tr>
+        </thead>
+        <tbody id="bot-stats-detail-body"></tbody>
+      </table>
     </div>`;
 
   showPopup("챗봇 클릭 통계", content);
+
+  const detailSection = document.getElementById("bot-stats-detail");
+  const detailTitle = document.getElementById("bot-detail-title");
+  const detailTotal = document.getElementById("bot-detail-total");
+  const detailBody = document.getElementById("bot-stats-detail-body");
+  const statsBody = document.getElementById("bot-stats-body");
+  const sortSelect = document.getElementById("stats-sort");
+
+  let botSummary = [];
+  let botUserMap = {};
+
+  function renderBotSummary() {
+    if (!statsBody) return;
+
+    statsBody.innerHTML = "";
+
+    if (!botSummary.length) {
+      statsBody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 border text-center">데이터가 없습니다.</td></tr>`;
+      if (detailSection) detailSection.style.display = "none";
+      return;
+    }
+
+    const sortMode = sortSelect ? sortSelect.value : "desc";
+    const sorted = [...botSummary];
+
+    sorted.sort((a, b) => {
+      if (sortMode === "name") {
+        return a.botName.localeCompare(b.botName, "ko");
+      }
+      if (sortMode === "asc") {
+        return a.count - b.count;
+      }
+      return b.count - a.count;
+    });
+
+    sorted.forEach((item, index) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="px-4 py-2 border text-center">${index + 1}</td>
+        <td class="px-4 py-2 border">${item.botName}</td>
+        <td class="px-4 py-2 border text-center">${item.count}</td>
+        <td class="px-4 py-2 border text-center">${item.uniqueUsers}</td>
+        <td class="px-4 py-2 border text-center">
+          <button class="btn-secondary text-sm bot-detail-btn" data-bot="${item.botName}">상세 보기</button>
+        </td>`;
+      statsBody.appendChild(tr);
+    });
+
+    statsBody.querySelectorAll(".bot-detail-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const botName = btn.getAttribute("data-bot");
+        renderBotDetail(botName);
+      });
+    });
+  }
+
+  function renderBotDetail(botName) {
+    const users = botUserMap[botName] || [];
+
+    if (!users.length) {
+      if (detailSection) detailSection.style.display = "none";
+      return;
+    }
+
+    if (detailSection) detailSection.style.display = "block";
+    if (detailTitle) detailTitle.textContent = `${botName} 사용자별 클릭 수`;
+    if (detailTotal) detailTotal.textContent = `총 ${users.reduce((sum, user) => sum + user.count, 0)}회`;
+    if (detailBody) detailBody.innerHTML = "";
+
+    users
+      .sort((a, b) => b.count - a.count)
+      .forEach(user => {
+        if (!detailBody) return;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="px-4 py-2 border">${user.displayName}</td>
+          <td class="px-4 py-2 border">${user.email}</td>
+          <td class="px-4 py-2 border text-center">${user.count}</td>`;
+        detailBody.appendChild(tr);
+      });
+  }
+
+  function resetDetail() {
+    if (detailSection) detailSection.style.display = "none";
+    if (detailTitle) detailTitle.textContent = "";
+    if (detailTotal) detailTotal.textContent = "";
+    if (detailBody) detailBody.innerHTML = "";
+  }
 
   document.getElementById("load-bot-stats").addEventListener("click", function() {
     const start = document.getElementById("stats-start").value;
@@ -1067,29 +1185,56 @@ function showBotClickStats() {
     if (!start || !end) return;
 
     firebase.database().ref("botUsageLogs").once("value").then(snapshot => {
-      const counts = {};
+      const summaryMap = {};
+
       snapshot.forEach(child => {
         const log = child.val();
-        if (log.timestamp && log.botName) {
-          const date = log.timestamp.slice(0,10);
-          if (date >= start && date <= end) {
-            counts[log.botName] = (counts[log.botName] || 0) + 1;
-          }
+        if (!log.timestamp || !log.botName) return;
+
+        const date = log.timestamp.slice(0, 10);
+        if (date < start || date > end) return;
+
+        const botName = log.botName;
+        const userKey = log.userId || log.email || "unknown";
+
+        if (!summaryMap[botName]) {
+          summaryMap[botName] = { count: 0, users: new Map() };
         }
+        summaryMap[botName].count += 1;
+
+        const users = summaryMap[botName].users;
+        const existing = users.get(userKey) || {
+          count: 0,
+          displayName: log.displayName || "알 수 없음",
+          email: log.email || "-"
+        };
+        existing.count += 1;
+        existing.displayName = log.displayName || existing.displayName;
+        existing.email = log.email || existing.email;
+        users.set(userKey, existing);
       });
 
-      const tbody = document.getElementById("bot-stats-body");
-      tbody.innerHTML = "";
-      Object.entries(counts).forEach(([name, count]) => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td class="px-4 py-2 border">${name}</td><td class="px-4 py-2 border text-center">${count}</td>`;
-        tbody.appendChild(tr);
-      });
-      if (Object.keys(counts).length === 0) {
-        tbody.innerHTML = `<tr><td colspan="2" class="px-4 py-4 border text-center">데이터가 없습니다.</td></tr>`;
-      }
+      botSummary = Object.entries(summaryMap).map(([botName, data]) => ({
+        botName,
+        count: data.count,
+        uniqueUsers: data.users.size
+      }));
+
+      botUserMap = Object.entries(summaryMap).reduce((acc, [botName, data]) => {
+        acc[botName] = Array.from(data.users.values());
+        return acc;
+      }, {});
+
+      resetDetail();
+      renderBotSummary();
     });
   });
+
+  if (sortSelect) {
+    sortSelect.addEventListener("change", () => {
+      renderBotSummary();
+    });
+  }
 }
 
 /****************************************
